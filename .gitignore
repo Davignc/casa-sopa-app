@@ -216,3 +216,36 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# ── Sistema operacional ──
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Variáveis de ambiente (variantes) ──
+.env.*
+!.env.example
+
+# ── Segredos e credenciais ──
+*.pem
+*.key
+*.p12
+credentials.json
+service-account*.json
+
+# ── Banco local / Docker ──
+pgdata/
+postgres-data/
+docker-compose.override.yml
+*.dump
+*.sql.gz
+
+# ── Uploads locais (comprovantes PIX em dev) ──
+uploads/
+media/
+storage/
+
+# ── Editores ──
+.idea/
+.vscode/

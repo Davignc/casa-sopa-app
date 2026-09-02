@@ -1,0 +1,40 @@
+[project]
+name = "casa-sopa"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "Davignc", email = "davigncc@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.19.1",
+    "apscheduler>=3.11.3",
+    "fastapi[standard]>=0.141.1",
+    "openpyxl>=3.1.5",
+    "passlib[bcrypt]>=1.7.4",
+    "psycopg[binary]>=3.3.5",
+    "pydantic-settings>=2.15.0",
+    "python-jose[cryptography]>=3.5.0",
+    "python-multipart>=0.0.32",
+    "sqlalchemy>=2.0.52",
+]
+
+[project.scripts]
+casa-sopa = "casa_sopa:main"
+
+[build-system]
+requires = ["uv_build>=0.12.9,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "factory-boy>=3.3.3",
+    "faker>=40.38.0",
+    "httpx>=0.28.1",
+    "mypy>=2.3.1",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.5",
+]
