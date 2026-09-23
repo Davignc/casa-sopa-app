@@ -9,6 +9,7 @@ requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.19.1",
     "apscheduler>=3.11.3",
+    "bcrypt>=4.0.1,<4.1",
     "fastapi[standard]>=0.141.1",
     "openpyxl>=3.1.5",
     "passlib[bcrypt]>=1.7.4",
@@ -25,6 +26,23 @@ casa-sopa = "casa_sopa:main"
 [build-system]
 requires = ["uv_build>=0.12.9,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
 
 [dependency-groups]
 dev = [
