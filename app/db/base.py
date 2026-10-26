@@ -9,8 +9,6 @@ from app.models import (  # noqa: F401
     Cliente,
     ClienteEndereco,
     Endereco,
-    Fornecedor,
-    Fornecimento,
     ItemVenda,
     Movimentacao,
     Produto,

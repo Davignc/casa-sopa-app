@@ -1,7 +1,7 @@
 [project]
 name = "casa-sopa"
 version = "0.1.0"
-description = "Add your description here"
+description = "API de gestão de vendas da Casa da Sopa de Restinga"
 authors = [
     { name = "Davignc", email = "davigncc@gmail.com" }
 ]
@@ -20,12 +20,9 @@ dependencies = [
     "sqlalchemy>=2.0.52",
 ]
 
-[project.scripts]
-casa-sopa = "casa_sopa:main"
-
-[build-system]
-requires = ["uv_build>=0.12.9,<0.13.0"]
-build-backend = "uv_build"
+[tool.uv]
+# Aplicação (não biblioteca): não há pacote a construir/instalar.
+package = false
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
@@ -38,6 +35,10 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Migrations são geradas pelo Alembic; não vale brigar com o estilo delas.
+"alembic/versions/*" = ["E501", "UP007", "UP035"]
 
 [tool.mypy]
 python_version = "3.12"

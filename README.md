@@ -1,350 +1,188 @@
-# Casa de Sopa — Sistema de Gestão de Vendas
+# Casa da Sopa de Restinga — Sistema de Gestão
 
-Sistema de gestão de vendas desenvolvido para a **Casa de Sopa**, ONG que promove o desenvolvimento social de crianças e adolescentes por meio de projetos culturais e esportivos, e que também distribui sopa a pessoas em situação de vulnerabilidade.
+API do sistema de gestão da **Casa da Sopa de Restinga**, organização social que arrecada
+recursos para suas ações de assistência à comunidade por meio da venda de sacos de lixo.
+O sistema informatiza o controle de clientes, produtos, estoque e pedidos, e é de **uso
+interno**: só a administradora e as vendedoras acessam.
 
-A ONG financia suas atividades por meio da venda de sacos de lixo. Este sistema centraliza o controle dessas vendas, do estoque e dos valores recebidos, dando à equipe visibilidade sobre a verba arrecadada para sustentar os projetos sociais.
+> Projeto semestral — Fatec Franca. Documentação de referência: Documento de Requisitos,
+> Diagrama de Casos de Uso, Documento de Modelagem de Dados (v5) e `casa_da_sopa_banco.sql`.
 
----
+## Módulos
 
-## Índice
-
-- [Funcionalidades](#funcionalidades)
-- [Stack](#stack)
-- [Pré-requisitos](#pré-requisitos)
-- [Configuração do ambiente](#configuração-do-ambiente)
-- [Banco de dados](#banco-de-dados)
-- [Rodando o projeto](#rodando-o-projeto)
-- [Testes](#testes)
-- [Qualidade de código](#qualidade-de-código)
-- [Estrutura do projeto](#estrutura-do-projeto)
-- [Variáveis de ambiente](#variáveis-de-ambiente)
-- [Fluxo de trabalho com Git](#fluxo-de-trabalho-com-git)
-- [Comandos úteis](#comandos-úteis)
-
----
-
-## Funcionalidades
-
-- Registro e acompanhamento de vendas
-- Controle de estoque de produtos
-- Acompanhamento dos valores recebidos
-- Anexo de comprovantes de PIX
-- Relatórios financeiros e de estoque
-
----
+| Módulo | Requisitos | Situação |
+|---|---|---|
+| S0 — Alinhamento ao modelo de dados, RBAC base, erros centralizados | — | ✅ |
+| M1 — Autenticação e usuários | RF01–RF06 | 🟡 login, `/me` e cadastro (admin) prontos |
+| M2 — Clientes | RF07–RF10 | ⬜ |
+| M4 — Produtos e estoque | RF17–RF25 | ⬜ |
+| M3 — Pedidos | RF11–RF16, RF26 | ⬜ |
+| M5 — Relatórios e dashboard | RF27–RF28 | ⬜ |
 
 ## Stack
 
 | Camada | Tecnologia |
 |---|---|
 | Linguagem | Python 3.12 |
-| Gerenciador de pacotes | uv |
+| Gerenciador de pacotes | [uv](https://docs.astral.sh/uv/) |
 | API | FastAPI |
-| ORM | SQLAlchemy 2.x |
-| Migrations | Alembic |
-| Banco de dados | PostgreSQL |
-| Driver | psycopg 3 |
+| ORM / migrations | SQLAlchemy 2.x / Alembic |
+| Banco | PostgreSQL (driver psycopg 3) |
 | Testes | pytest |
-| Lint / Format | Ruff |
-| Storage de arquivos | Cloudflare R2 (compatível com S3) |
+| Lint / formatação / tipos | Ruff / mypy |
 
----
+## Começando
 
-## Pré-requisitos
-
-- **uv** — gerenciador de pacotes e versões do Python
-- **PostgreSQL** — local ou em nuvem
-- **Git**
-
-### Instalando o uv
-
-```bash
-# Linux / macOS
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows (PowerShell)
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-Confirme a instalação:
-
-```bash
-uv --version
-```
-
-> Não é necessário instalar o Python manualmente. O `uv` cuida disso a partir do arquivo `.python-version` do projeto.
-
----
-
-## Configuração do ambiente
-
-### 1. Clone o repositório
+Pré-requisitos: [uv](https://docs.astral.sh/uv/getting-started/installation/), Git e um PostgreSQL
+(local ou Docker). O uv baixa o Python correto sozinho (`.python-version`).
 
 ```bash
 git clone <url-do-repositorio>
-cd casa_sopa
+cd casa-sopa-app
+uv sync                      # cria o .venv e instala as dependências travadas
+cp .env.example .env         # depois edite o .env (veja "Variáveis de ambiente")
 ```
 
-### 2. Instale as dependências
-
-```bash
-uv sync
-```
-
-Este comando cria o ambiente virtual em `.venv/`, baixa a versão correta do Python e instala todas as dependências travadas no `uv.lock`.
-
-> **Não é preciso ativar o `.venv` manualmente.** Use `uv run <comando>` e o uv resolve o ambiente automaticamente.
-
-### 3. Configure as variáveis de ambiente
-
-```bash
-cp .env.example .env
-```
-
-Edite o `.env` com os valores do seu ambiente local. Veja a seção [Variáveis de ambiente](#variáveis-de-ambiente).
-
----
-
-## Banco de dados
-
-### Subindo um Postgres local com Docker
+### Banco de dados
 
 ```bash
 docker run --name casa-sopa-db \
-  -e POSTGRES_USER=casa_sopa \
-  -e POSTGRES_PASSWORD=casa_sopa \
-  -e POSTGRES_DB=casa_sopa \
-  -p 5432:5432 \
-  -d postgres:16
+  -e POSTGRES_USER=casa_sopa -e POSTGRES_PASSWORD=casa_sopa -e POSTGRES_DB=casa_sopa \
+  -p 5432:5432 -d postgres:16
+
+# banco usado pelos testes
+docker exec casa-sopa-db psql -U casa_sopa -c "CREATE DATABASE casa_sopa_test;"
+
+uv run alembic upgrade head  # aplica as migrations
 ```
 
-A `DATABASE_URL` correspondente:
+### Primeira administradora
 
-```
-postgresql+psycopg://casa_sopa:casa_sopa@localhost:5432/casa_sopa
-```
-
-### Aplicando as migrations
+Só uma administradora cadastra usuários (RN03), então a primeira é criada por comando:
 
 ```bash
-uv run alembic upgrade head
+uv run python -m app.cli criar-admin --nome "Nome" --email admin@exemplo.org --telefone 16999990000
 ```
 
-### Criando uma nova migration
+A senha é pedida no terminal (mínimo 8 caracteres).
 
-Sempre que alterar ou criar um modelo em `app/models/`:
-
-```bash
-uv run alembic revision --autogenerate -m "descricao da mudanca"
-uv run alembic upgrade head
-```
-
-> Revise o arquivo gerado em `alembic/versions/` antes de commitar. O autogenerate não detecta tudo (renomeações de coluna, mudanças de tipo em alguns casos).
-
-### Desfazendo a última migration
-
-```bash
-uv run alembic downgrade -1
-```
-
----
-
-## Rodando o projeto
+### Rodando
 
 ```bash
 uv run fastapi dev app/main.py
 ```
 
-A API sobe em `http://localhost:8000` com reload automático.
+API em <http://localhost:8000> · Swagger em `/docs` · ReDoc em `/redoc`
+(a documentação interativa fica desligada com `ENVIRONMENT=production`).
 
-Documentação interativa:
+## Modelo de dados
 
-- Swagger UI — http://localhost:8000/docs
-- ReDoc — http://localhost:8000/redoc
+Oito tabelas, conforme o script `casa_da_sopa_banco.sql` (os nomes das colunas estão em
+`snake_case`): `usuario`, `produto`, `cliente`, `endereco`, `cliente_endereco`, `vendas`,
+`item_vendas`, `movimentacoes`.
 
----
+- **Exclusão lógica:** usuários, clientes, produtos e endereços são inativados (`is_ativo`),
+  nunca apagados — o histórico de vendas e movimentações é preservado (RM06).
+- **Endereço de entrega:** `vendas (id_cliente, id_endereco)` referencia `cliente_endereco`;
+  o banco recusa um endereço que não seja do cliente da venda (RM05).
+- **Preço no item:** `item_vendas.preco_unitario_v` guarda o preço praticado; reajustar o
+  produto não altera vendas antigas.
+- **Fora do modelo:** fornecedores (RM03), comprovante de PIX e integração bancária.
+- Os `CHECK`s do script (valores não negativos, subtotal coerente, comissão de 0 a 100,
+  coerência entre tipo de referência e venda) fazem parte da migration.
 
-## Testes
-
-```bash
-# rodar toda a suíte
-uv run pytest
-
-# com relatório de cobertura
-uv run pytest --cov=app --cov-report=term-missing
-
-# um arquivo específico
-uv run pytest tests/test_vendas.py
-
-# um teste específico
-uv run pytest tests/test_vendas.py::test_criar_venda
-```
-
----
-
-## Qualidade de código
+### Migrations
 
 ```bash
-# verificar problemas
-uv run ruff check .
-
-# corrigir automaticamente o que for possível
-uv run ruff check . --fix
-
-# formatar
-uv run ruff format .
-
-# checagem de tipos
-uv run mypy app/
+uv run alembic revision --autogenerate -m "descricao"   # após alterar app/models/
+uv run alembic upgrade head
+uv run alembic downgrade -1
+uv run alembic check                                      # modelos e banco estão iguais?
 ```
 
-### Hooks de pre-commit
+Revise o arquivo gerado antes de commitar. Todo modelo novo precisa ser importado em
+`app/db/base.py`, senão o Alembic não o enxerga.
 
-Instale uma única vez após clonar:
+## Permissões (RN01, RNF04)
+
+O cargo (`administradora` ou `vendedora`) é lido do banco **a cada requisição**: rebaixar ou
+inativar uma usuária vale na hora, sem esperar o token expirar. Rotas restritas usam as
+dependências de `app/api/deps.py` (`AdminAtual`, `exige_cargo(...)`).
+
+## Testes e qualidade
 
 ```bash
-uv run pre-commit install
+uv run pytest                                       # toda a suíte (usa TEST_DATABASE_URL)
+uv run pytest --cov=app --cov-report=term-missing   # com cobertura
+uv run ruff check . && uv run ruff format --check . # lint e formatação
+uv run mypy app/                                    # tipos
+uv run pre-commit install                           # lint/format automáticos a cada commit
 ```
 
-A partir daí, lint e format rodam automaticamente a cada commit.
+`tests/test_modelagem.py` verifica que o **próprio banco** recusa dados inválidos (CHECKs,
+UNIQUEs, chave composta de endereço, RESTRICT/CASCADE), independentemente da API.
 
----
-
-## Estrutura do projeto
+## Estrutura
 
 ```
-casa_sopa/
-├── alembic/
-│   └── versions/          # migrations (versionadas!)
-├── app/
-│   ├── main.py            # instância do FastAPI
-│   ├── core/
-│   │   └── config.py      # settings via pydantic-settings
-│   ├── db/
-│   │   ├── base.py        # Base declarativa do SQLAlchemy
-│   │   └── session.py     # engine e sessão
-│   ├── models/            # modelos SQLAlchemy (tabelas)
-│   ├── schemas/           # schemas Pydantic (entrada/saída)
-│   ├── routers/           # endpoints da API
-│   └── services/          # regras de negócio
-├── tests/
-├── .env.example
-├── .python-version
-├── alembic.ini
-├── pyproject.toml
-└── uv.lock
+app/
+├── main.py            # instância do FastAPI e registro dos routers
+├── cli.py             # comandos (criar-admin)
+├── core/              # config, segurança (hash/JWT), erros, validadores
+├── db/                # Base declarativa, sessão
+├── models/            # tabelas (SQLAlchemy)
+├── schemas/           # entrada/saída (Pydantic)
+├── routers/           # endpoints
+├── services/          # regras de negócio
+└── api/deps.py        # dependências: sessão, usuário atual, permissões
+alembic/versions/      # migrations (versionadas!)
+tests/
 ```
-
-### Onde colocar cada coisa
 
 | Preciso de... | Vai em... |
 |---|---|
-| Uma nova tabela | `app/models/` |
-| Validação de request/response | `app/schemas/` |
-| Um novo endpoint | `app/routers/` |
-| Regra de negócio, cálculo | `app/services/` |
-| Uma configuração nova | `app/core/config.py` + `.env.example` |
-
----
+| Uma nova tabela | `app/models/` + importar em `app/db/base.py` + migration |
+| Validação de entrada/saída | `app/schemas/` |
+| Um endpoint | `app/routers/` (e registrar em `app/main.py`) |
+| Regra de negócio | `app/services/` (lançar subclasses de `ErroDeNegocio`) |
+| Configuração nova | `app/core/config.py` + `.env.example` |
 
 ## Variáveis de ambiente
 
-Todas ficam no `.env` (que **não** é versionado). Use o `.env.example` como referência.
+Ficam no `.env` (**nunca** versionado). Use o `.env.example` como referência.
 
 | Variável | Descrição |
 |---|---|
-| `DATABASE_URL` | String de conexão do PostgreSQL |
-| `SECRET_KEY` | Chave para assinatura dos tokens JWT |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Tempo de expiração do token de acesso |
-| `S3_ENDPOINT_URL` | Endpoint do bucket (Cloudflare R2) |
-| `S3_ACCESS_KEY_ID` | Chave de acesso do bucket |
-| `S3_SECRET_ACCESS_KEY` | Segredo de acesso do bucket |
-| `S3_BUCKET_NAME` | Nome do bucket dos comprovantes |
+| `DATABASE_URL` | Conexão do PostgreSQL |
+| `TEST_DATABASE_URL` | Banco da suíte de testes (recriado a cada execução) |
+| `SECRET_KEY` | Assinatura dos JWT — **obrigatória, mínimo 32 caracteres** |
+| `ALGORITHM` | Algoritmo do JWT (padrão `HS256`) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Validade do token (padrão 60) |
 | `ENVIRONMENT` | `development`, `staging` ou `production` |
 
-> Nunca commite o `.env`. Se adicionar uma variável nova, adicione também ao `.env.example` (sem o valor real) para o resto da equipe saber que ela existe.
-
-Para gerar uma `SECRET_KEY`:
-
 ```bash
-uv run python -c "import secrets; print(secrets.token_urlsafe(32))"
+uv run python -c "import secrets; print(secrets.token_urlsafe(32))"   # gera uma SECRET_KEY
 ```
-
----
 
 ## Fluxo de trabalho com Git
 
-1. Atualize a `main` e crie sua branch:
+```bash
+git checkout dev && git pull
+git checkout -b feat/nome-da-funcionalidade
+# desenvolva, rodando uv run pytest
+git add . && git commit -m "feat: adiciona cadastro de clientes"
+git push -u origin feat/nome-da-funcionalidade   # e abra o Pull Request para dev
+```
 
-   ```bash
-   git checkout main
-   git pull
-   git checkout -b feat/nome-da-funcionalidade
-   ```
+Prefixos de commit: `feat:` · `fix:` · `refactor:` · `test:` · `docs:` · `chore:`.
 
-2. Desenvolva, rodando os testes conforme avança:
-
-   ```bash
-   uv run pytest
-   ```
-
-3. Commit e push:
-
-   ```bash
-   git add .
-   git commit -m "feat: adiciona registro de vendas"
-   git push -u origin feat/nome-da-funcionalidade
-   ```
-
-4. Abra o Pull Request.
-
-### Prefixos de commit
-
-| Prefixo | Quando usar |
-|---|---|
-| `feat:` | Nova funcionalidade |
-| `fix:` | Correção de bug |
-| `refactor:` | Mudança de código sem alterar comportamento |
-| `test:` | Adição ou ajuste de testes |
-| `docs:` | Documentação |
-| `chore:` | Configuração, dependências, tarefas de manutenção |
-
-### Arquivos que devem ser commitados
-
-- `pyproject.toml` e `uv.lock` — sempre juntos, ao adicionar ou remover dependências
-- `.python-version`
-- `alembic/versions/*.py` — as migrations são parte do código
-- `.env.example` — sempre que uma variável nova for adicionada
-
----
-
-## Comandos úteis
-
-| Ação | Comando |
-|---|---|
-| Instalar dependências | `uv sync` |
-| Adicionar uma lib | `uv add <pacote>` |
-| Adicionar lib de desenvolvimento | `uv add --dev <pacote>` |
-| Remover uma lib | `uv remove <pacote>` |
-| Atualizar dependências | `uv sync --upgrade` |
-| Ver árvore de dependências | `uv tree` |
-| Rodar a API | `uv run fastapi dev app/main.py` |
-| Rodar os testes | `uv run pytest` |
-| Aplicar migrations | `uv run alembic upgrade head` |
-| Abrir um shell Python no projeto | `uv run python` |
-
----
+Devem ser commitados: `pyproject.toml` + `uv.lock` (sempre juntos), `.python-version`,
+`alembic/versions/*.py` e o `.env.example`.
 
 ## Solução de problemas
 
-**`uv sync` reclama da versão do Python**
-
-O projeto está pinado no `.python-version`. Rode `uv python install` para que o uv baixe a versão correta.
-
-**Erro de conexão com o banco**
-
-Verifique se o Postgres está rodando (`docker ps`) e se a `DATABASE_URL` no `.env` bate com as credenciais do container.
-
-**Alembic não encontra os modelos no autogenerate**
-
-Todo modelo novo precisa ser importado em `app/db/base.py`, senão o Alembic não enxerga a tabela.
+- **`uv sync` reclama da versão do Python** — rode `uv python install`.
+- **Erro de conexão com o banco** — confira se o Postgres está no ar (`docker ps`) e se a
+  `DATABASE_URL` do `.env` bate com as credenciais.
+- **Alembic não vê uma tabela nova** — importe o modelo em `app/db/base.py`.
+- **A aplicação não sobe e cita `SECRET_KEY`** — ela está vazia ou tem menos de 32 caracteres.

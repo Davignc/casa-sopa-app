@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from app.schemas.usuario import UsuarioCreate
+from app.services import usuario as usuario_service
 
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
@@ -59,30 +61,71 @@ def client(db: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
+def cabecalho_auth(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _login(client: TestClient, dados: dict[str, str]) -> str:
+    resposta = client.post(
+        "/auth/login/json", json={"email": dados["email"], "senha": dados["senha"]}
+    )
+    assert resposta.status_code == 200, resposta.text
+    return resposta.json()["access_token"]
+
+
 @pytest.fixture
 def dados_usuario() -> dict[str, str]:
+    """Dados de uma vendedora (o cargo mais comum no sistema)."""
     return {
         "nome": "Maria da Silva",
         "email": "maria@casadasopa.org",
-        "endereco": "Rua das Flores, 100",
-        "telefone": "11999998888",
+        "telefone": "16999998888",
+        "cargo": "vendedora",
+        "comissao": "5.00",
         "senha": "senhaForte123",
     }
 
 
 @pytest.fixture
-def usuario_cadastrado(client: TestClient, dados_usuario: dict[str, str]) -> dict[str, str]:
-    """Cria o usuário via API e devolve os dados usados (com a senha em claro)."""
-    resposta = client.post("/usuarios", json=dados_usuario)
-    assert resposta.status_code == 201, resposta.text
+def dados_admin() -> dict[str, str]:
+    return {
+        "nome": "Ana Administradora",
+        "email": "ana@casadasopa.org",
+        "telefone": "16988887777",
+        "cargo": "administradora",
+        "senha": "adminForte123",
+    }
+
+
+@pytest.fixture
+def usuario_cadastrado(db: Session, dados_usuario: dict[str, str]) -> dict[str, str]:
+    """Cria uma vendedora direto no banco e devolve os dados (com a senha em claro)."""
+    usuario_service.criar_usuario(db, UsuarioCreate(**dados_usuario))
     return dados_usuario
 
 
 @pytest.fixture
+def admin_cadastrada(db: Session, dados_admin: dict[str, str]) -> dict[str, str]:
+    usuario_service.criar_usuario(db, UsuarioCreate(**dados_admin))
+    return dados_admin
+
+
+@pytest.fixture
 def token(client: TestClient, usuario_cadastrado: dict[str, str]) -> str:
-    resposta = client.post(
-        "/auth/login/json",
-        json={"email": usuario_cadastrado["email"], "senha": usuario_cadastrado["senha"]},
-    )
-    assert resposta.status_code == 200, resposta.text
-    return resposta.json()["access_token"]
+    """Token da vendedora."""
+    return _login(client, usuario_cadastrado)
+
+
+@pytest.fixture
+def token_admin(client: TestClient, admin_cadastrada: dict[str, str]) -> str:
+    return _login(client, admin_cadastrada)
+
+
+@pytest.fixture
+def headers_admin(token_admin: str) -> dict[str, str]:
+    return cabecalho_auth(token_admin)
+
+
+@pytest.fixture
+def headers_vendedora(token: str) -> dict[str, str]:
+    return cabecalho_auth(token)

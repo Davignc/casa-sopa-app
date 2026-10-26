@@ -1,14 +1,16 @@
 """Dependências compartilhadas pelos endpoints."""
 
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
+from app.core.errors import AcessoNegadoError
 from app.core.security import decodificar_access_token
 from app.db.session import get_db
-from app.models.usuario import Usuario
+from app.models.usuario import CARGO_ADMINISTRADORA, Usuario
 from app.services import usuario as usuario_service
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -52,3 +54,21 @@ def get_usuario_atual(
 
 
 UsuarioAtual = Annotated[Usuario, Depends(get_usuario_atual)]
+
+
+def exige_cargo(*cargos: str) -> Callable[[Usuario], Usuario]:
+    """Fábrica de dependência: só deixa passar usuários com um dos cargos (RN01).
+
+    O cargo vem do banco a cada request, não do token — então rebaixar ou
+    inativar uma usuária vale imediatamente, sem esperar o token expirar.
+    """
+
+    def _verifica(usuario: UsuarioAtual) -> Usuario:
+        if usuario.cargo not in cargos:
+            raise AcessoNegadoError("Você não tem permissão para esta operação.")
+        return usuario
+
+    return _verifica
+
+
+AdminAtual = Annotated[Usuario, Depends(exige_cargo(CARGO_ADMINISTRADORA))]

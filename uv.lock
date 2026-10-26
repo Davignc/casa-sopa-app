@@ -160,7 +160,7 @@ wheels = [
 [[package]]
 name = "casa-sopa"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "alembic" },
     { name = "apscheduler" },
