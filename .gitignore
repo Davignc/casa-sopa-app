@@ -249,3 +249,7 @@ storage/
 # ── Editores ──
 .idea/
 .vscode/
+# Backups do banco (contêm todos os dados)
+backups/
+*.dump
+*.db

@@ -2,22 +2,30 @@
 
 Cada teste roda dentro de uma transação que é revertida no fim, então um teste
 nunca enxerga os dados do outro. O schema é criado uma vez por sessão no banco
-apontado por TEST_DATABASE_URL.
+apontado por TEST_DATABASE_URL (PostgreSQL, ou ``sqlite://`` para um banco
+temporário em memória, sem precisar de servidor).
 """
 
 import os
 from collections.abc import Generator
 
 import pytest
+from dotenv import load_dotenv
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.db.base import Base
-from app.db.session import get_db
-from app.main import app
-from app.schemas.usuario import UsuarioCreate
-from app.services import usuario as usuario_service
+# bcrypt com custo mínimo: a suíte faz centenas de hashes e o custo 12 (produção) a deixaria lenta.
+os.environ.setdefault("BCRYPT_ROUNDS", "4")
+
+# Permite definir TEST_DATABASE_URL no .env (o pydantic-settings não o exporta ao ambiente).
+load_dotenv()
+
+from app.core import protecao  # noqa: E402
+from app.db.base import Base  # noqa: E402
+from app.db.session import criar_engine, get_db  # noqa: E402
+from app.main import app  # noqa: E402
+from app.schemas.usuario import UsuarioCreate  # noqa: E402
+from app.services import usuario as usuario_service  # noqa: E402
 
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
@@ -27,7 +35,7 @@ TEST_DATABASE_URL = os.getenv(
 
 @pytest.fixture(scope="session")
 def engine():
-    eng = create_engine(TEST_DATABASE_URL, pool_pre_ping=True)
+    eng = criar_engine(TEST_DATABASE_URL)
     Base.metadata.drop_all(eng)
     Base.metadata.create_all(eng)
     yield eng
@@ -39,7 +47,14 @@ def db(engine) -> Generator[Session, None, None]:
     """Sessão ligada a uma transação externa, descartada ao fim do teste."""
     connection = engine.connect()
     transaction = connection.begin()
-    session = sessionmaker(bind=connection, autocommit=False, autoflush=False)()
+    # create_savepoint: commit/rollback dentro do app valem só até o savepoint, como em
+    # produção, sem derrubar os dados que o próprio teste preparou.
+    session = sessionmaker(
+        bind=connection,
+        autocommit=False,
+        autoflush=False,
+        join_transaction_mode="create_savepoint",
+    )()
     try:
         yield session
     finally:
@@ -59,6 +74,14 @@ def client(db: Session) -> Generator[TestClient, None, None]:
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def _zerar_protecoes() -> Generator[None, None, None]:
+    """Bloqueios de login e tokens revogados vivem em memória: zera entre os testes."""
+    protecao.limpar_tudo()
+    yield
+    protecao.limpar_tudo()
 
 
 def cabecalho_auth(token: str) -> dict[str, str]:

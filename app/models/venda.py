@@ -25,6 +25,21 @@ if TYPE_CHECKING:
     from app.models.usuario import Usuario
 
 
+STATUS_EM_ABERTO = "em_aberto"
+STATUS_CONFIRMADO = "confirmado"
+STATUS_ENTREGUE = "entregue"
+STATUS_CANCELADO = "cancelado"
+STATUS = (STATUS_EM_ABERTO, STATUS_CONFIRMADO, STATUS_ENTREGUE, STATUS_CANCELADO)
+
+# Transições permitidas (RF26). "entregue" e "cancelado" são finais.
+TRANSICOES: dict[str, frozenset[str]] = {
+    STATUS_EM_ABERTO: frozenset({STATUS_CONFIRMADO, STATUS_CANCELADO}),
+    STATUS_CONFIRMADO: frozenset({STATUS_ENTREGUE, STATUS_CANCELADO}),
+    STATUS_ENTREGUE: frozenset(),
+    STATUS_CANCELADO: frozenset(),
+}
+
+
 class Venda(Base):
     """Pedido de um cliente, registrado por uma vendedora (RN09).
 

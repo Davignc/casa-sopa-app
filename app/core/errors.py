@@ -19,10 +19,35 @@ class ErroDeNegocio(Exception):
 
     status_code: int = status.HTTP_400_BAD_REQUEST
     detail: str = "Requisição inválida."
+    headers: dict[str, str] | None = None
 
     def __init__(self, detail: str | None = None) -> None:
         self.detail = detail or self.detail
         super().__init__(self.detail)
+
+
+class NaoAutenticadoError(ErroDeNegocio):
+    status_code = status.HTTP_401_UNAUTHORIZED
+    detail = "Não foi possível validar as credenciais."
+    headers = {"WWW-Authenticate": "Bearer"}
+
+
+class RegraInvalidaError(ErroDeNegocio):
+    """Dados bem formados, mas que violam uma regra de negócio (422)."""
+
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    detail = "Os dados enviados violam uma regra de negócio."
+
+
+class TentativasExcedidasError(ErroDeNegocio):
+    """Limite de tentativas atingido: o cliente deve esperar ``segundos`` (429)."""
+
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+
+    def __init__(self, segundos: int) -> None:
+        minutos = max(1, -(-segundos // 60))  # arredonda para cima
+        super().__init__(f"Muitas tentativas. Tente novamente em {minutos} minuto(s).")
+        self.headers = {"Retry-After": str(max(1, segundos))}
 
 
 class NaoEncontradoError(ErroDeNegocio):
@@ -43,7 +68,11 @@ class AcessoNegadoError(ErroDeNegocio):
 def registrar_handlers(app: FastAPI) -> None:
     @app.exception_handler(ErroDeNegocio)
     async def _erro_de_negocio(_: Request, exc: ErroDeNegocio) -> JSONResponse:
-        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=exc.headers,
+        )
 
     @app.exception_handler(IntegrityError)
     async def _integridade(_: Request, exc: IntegrityError) -> JSONResponse:

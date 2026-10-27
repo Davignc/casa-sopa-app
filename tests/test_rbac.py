@@ -47,7 +47,7 @@ def test_admin_inativada_perde_acesso_na_hora(
 
 
 def test_token_de_usuario_inexistente_retorna_401(client):
-    token = criar_access_token(999999)
+    token = criar_access_token(999999, versao_senha="x")
 
     resposta = client.get("/usuarios/me", headers={"Authorization": f"Bearer {token}"})
 
@@ -55,7 +55,7 @@ def test_token_de_usuario_inexistente_retorna_401(client):
 
 
 def test_token_com_sub_nao_numerico_retorna_401(client):
-    token = criar_access_token("abc")
+    token = criar_access_token("abc", versao_senha="x")
 
     resposta = client.get("/usuarios/me", headers={"Authorization": f"Bearer {token}"})
 
