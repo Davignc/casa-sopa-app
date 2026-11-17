@@ -50,6 +50,11 @@ class TentativasExcedidasError(ErroDeNegocio):
         self.headers = {"Retry-After": str(max(1, segundos))}
 
 
+class ArquivoGrandeError(ErroDeNegocio):
+    status_code = status.HTTP_413_CONTENT_TOO_LARGE
+    detail = "O arquivo é grande demais."
+
+
 class NaoEncontradoError(ErroDeNegocio):
     status_code = status.HTTP_404_NOT_FOUND
     detail = "Registro não encontrado."

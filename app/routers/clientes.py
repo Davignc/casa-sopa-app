@@ -8,7 +8,7 @@ from app.schemas.cliente import (
     ClienteRead,
     ClienteResumo,
     ClienteUpdate,
-    EnderecoEntrada,
+    EnderecoDoCliente,
     EnderecoVinculoUpdate,
 )
 from app.schemas.comum import Pagina
@@ -82,9 +82,13 @@ def reativar_cliente(id_cliente: IdCliente, db: DbSession, _op: OperadorAtual) -
     "/{id_cliente}/enderecos", response_model=ClienteRead, status_code=status.HTTP_201_CREATED
 )
 def adicionar_endereco(
-    id_cliente: IdCliente, dados: EnderecoEntrada, db: DbSession, _op: OperadorAtual
+    id_cliente: IdCliente, dados: EnderecoDoCliente, db: DbSession, _op: OperadorAtual
 ) -> ClienteRead:
-    """Inclui um endereço de entrega (RF08). O primeiro endereço vira o principal."""
+    """Inclui um endereço de entrega (RF08). O primeiro endereço vira o principal.
+
+    Envie o endereço completo (novo) **ou** `id_endereco` de um endereço já registrado
+    (achado em `GET /enderecos`) com número, complemento e referência do vínculo.
+    """
     cliente = cliente_service.obter_ou_404(db, id_cliente)
     return cliente_service.montar_detalhe(cliente_service.adicionar_endereco(db, cliente, dados))
 

@@ -1,0 +1,65 @@
+{
+  "duracao_segundos": 331.33,
+  "capitulos": [
+    {
+      "inicio": 0.0,
+      "titulo": "Tudo em um só lugar"
+    },
+    {
+      "inicio": 19.333,
+      "titulo": "Esqueceu a senha?"
+    },
+    {
+      "inicio": 39.467,
+      "titulo": "Crie uma nova senha"
+    },
+    {
+      "inicio": 58.467,
+      "titulo": "O dia começa aqui"
+    },
+    {
+      "inicio": 79.8,
+      "titulo": "Conheça seus clientes"
+    },
+    {
+      "inicio": 100.4,
+      "titulo": "Uma venda, poucos passos"
+    },
+    {
+      "inicio": 121.267,
+      "titulo": "Acompanhe cada entrega"
+    },
+    {
+      "inicio": 146.933,
+      "titulo": "Estoque sob controle"
+    },
+    {
+      "inicio": 169.8,
+      "titulo": "Entenda cada mudança"
+    },
+    {
+      "inicio": 188.667,
+      "titulo": "Transforme dados em decisões"
+    },
+    {
+      "inicio": 211.733,
+      "titulo": "Traga suas planilhas antigas"
+    },
+    {
+      "inicio": 235.0,
+      "titulo": "Confira antes de salvar"
+    },
+    {
+      "inicio": 259.267,
+      "titulo": "Cada pessoa com seu acesso"
+    },
+    {
+      "inicio": 281.4,
+      "titulo": "A identidade da sua organização"
+    },
+    {
+      "inicio": 305.333,
+      "titulo": "Mais tempo para cuidar"
+    }
+  ]
+}

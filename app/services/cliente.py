@@ -7,7 +7,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from app.core.errors import ConflitoError, NaoEncontradoError, RegraInvalidaError
+from app.core.errors import ConflitoError, ErroDeNegocio, NaoEncontradoError, RegraInvalidaError
 from app.core.formatacao import formatar_endereco
 from app.models.cliente import Cliente
 from app.models.cliente_endereco import ClienteEndereco
@@ -19,10 +19,12 @@ from app.schemas.cliente import (
     ClienteRead,
     ClienteResumo,
     ClienteUpdate,
+    EnderecoDoCliente,
     EnderecoEntrada,
     EnderecoRead,
     EnderecoVinculoUpdate,
     ResponsavelRead,
+    VinculoExistente,
 )
 
 logger = logging.getLogger("casa_sopa.clientes")
@@ -41,11 +43,15 @@ def _com_enderecos() -> Any:
     return selectinload(Cliente.enderecos).selectinload(ClienteEndereco.endereco)
 
 
+def _com_usuario() -> Any:
+    return selectinload(Cliente.usuario)
+
+
 def obter_ou_404(db: Session, id_cliente: int) -> Cliente:
     cliente = db.scalar(
         select(Cliente)
         .where(Cliente.id_cliente == id_cliente)
-        .options(_com_enderecos(), selectinload(Cliente.usuario))
+        .options(_com_enderecos(), _com_usuario())
     )
     if cliente is None:
         raise NaoEncontradoError("Cliente não encontrado.")
@@ -96,13 +102,13 @@ def montar_resumo(cliente: Cliente) -> ClienteResumo:
         telefone=cliente.telefone,
         is_ativo=cliente.is_ativo,
         endereco_principal=_principal(cliente),
+        cadastrado_por=ResponsavelRead.model_validate(cliente.usuario),
     )
 
 
 def montar_detalhe(cliente: Cliente) -> ClienteRead:
     return ClienteRead(
         **montar_resumo(cliente).model_dump(),
-        cadastrado_por=ResponsavelRead.model_validate(cliente.usuario),
         enderecos=[montar_endereco(v) for v in _vinculos_ativos(cliente)],
     )
 
@@ -117,10 +123,24 @@ def listar(
     if busca and busca.strip():
         termo = busca.strip()
         escapado = termo.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        condicoes = [Cliente.nome.ilike(f"%{escapado}%", escape="\\")]
+        condicoes: list[Any] = [Cliente.nome.ilike(f"%{escapado}%", escape="\\")]
         digitos = "".join(c for c in termo if c.isdigit())
         if digitos:
             condicoes.append(Cliente.telefone.like(f"%{digitos}%"))
+        if termo.isdigit() and len(termo) <= 9:  # também aceita o código (nº) do cliente
+            condicoes.append(Cliente.id_cliente == int(termo))
+        padrao = f"%{escapado}%"
+        condicoes.append(
+            Cliente.enderecos.any(
+                ClienteEndereco.endereco.has(
+                    or_(
+                        Endereco.nome_logradouro.ilike(padrao, escape="\\"),
+                        Endereco.bairro.ilike(padrao, escape="\\"),
+                        Endereco.cidade.ilike(padrao, escape="\\"),
+                    )
+                )
+            )
+        )
         filtros.append(or_(*condicoes))
 
     total = db.scalar(select(func.count()).select_from(Cliente).where(*filtros)) or 0
@@ -130,7 +150,7 @@ def listar(
         .order_by(Cliente.nome, Cliente.id_cliente)
         .limit(limit)
         .offset(offset)
-        .options(_com_enderecos())
+        .options(_com_enderecos(), _com_usuario())
     ).all()
     return list(itens), total
 
@@ -161,8 +181,19 @@ def _buscar_endereco(db: Session, dados: EnderecoEntrada) -> Endereco | None:
     )
 
 
-def _resolver_endereco(db: Session, dados: EnderecoEntrada) -> Endereco:
-    """Reaproveita o endereço físico se já existir (RM04); senão cria."""
+def _endereco_registrado(db: Session, id_endereco: int) -> Endereco:
+    endereco = db.get(Endereco, id_endereco)
+    if endereco is None:
+        raise NaoEncontradoError("Endereço não encontrado.")
+    if not endereco.is_ativo:
+        raise RegraInvalidaError("Este endereço não está mais disponível. Cadastre-o de novo.")
+    return endereco
+
+
+def _resolver_endereco(db: Session, dados: EnderecoDoCliente) -> Endereco:
+    """Usa o endereço escolhido, reaproveita o físico igual (RM04) ou cria um novo."""
+    if isinstance(dados, VinculoExistente):
+        return _endereco_registrado(db, dados.id_endereco)
     existente = _buscar_endereco(db, dados)
     if existente is not None:
         existente.is_ativo = True
@@ -184,7 +215,7 @@ def _definir_principal(cliente: Cliente, id_endereco: int) -> None:
         v.principal = v.id_endereco == id_endereco
 
 
-def _vincular(db: Session, cliente: Cliente, dados: EnderecoEntrada) -> ClienteEndereco:
+def _vincular(db: Session, cliente: Cliente, dados: EnderecoDoCliente) -> ClienteEndereco:
     endereco = _resolver_endereco(db, dados)
     vinculo = db.get(ClienteEndereco, (cliente.id_cliente, endereco.id_endereco))
     if vinculo is None:
@@ -217,18 +248,21 @@ def criar(db: Session, dados: ClienteCreate, ator: Usuario) -> Cliente:
     db.add(cliente)
     db.flush()
 
-    vistos: set[int] = set()
-    principal_id: int | None = None
-    for entrada in dados.enderecos:
-        vinculo = _vincular(db, cliente, entrada)
-        if vinculo.id_endereco in vistos:
-            db.rollback()
-            raise RegraInvalidaError("O mesmo endereço foi informado mais de uma vez.")
-        vistos.add(vinculo.id_endereco)
-        if entrada.principal:
-            principal_id = vinculo.id_endereco
-    if principal_id is not None:
-        _definir_principal(cliente, principal_id)
+    try:
+        vistos: set[int] = set()
+        principal_id: int | None = None
+        for entrada in dados.enderecos:
+            vinculo = _vincular(db, cliente, entrada)
+            if vinculo.id_endereco in vistos:
+                raise RegraInvalidaError("O mesmo endereço foi informado mais de uma vez.")
+            vistos.add(vinculo.id_endereco)
+            if entrada.principal:
+                principal_id = vinculo.id_endereco
+        if principal_id is not None:
+            _definir_principal(cliente, principal_id)
+    except ErroDeNegocio:
+        db.rollback()  # nada de cliente pela metade
+        raise
 
     try:
         db.commit()
@@ -279,8 +313,11 @@ def _vinculo_ativo_ou_404(cliente: Cliente, id_endereco: int) -> ClienteEndereco
     raise NaoEncontradoError("Endereço não encontrado para este cliente.")
 
 
-def adicionar_endereco(db: Session, cliente: Cliente, dados: EnderecoEntrada) -> Cliente:
-    endereco_existente = _buscar_endereco(db, dados)
+def adicionar_endereco(db: Session, cliente: Cliente, dados: EnderecoDoCliente) -> Cliente:
+    if isinstance(dados, VinculoExistente):
+        endereco_existente: Endereco | None = _endereco_registrado(db, dados.id_endereco)
+    else:
+        endereco_existente = _buscar_endereco(db, dados)
     if endereco_existente is not None and endereco_existente.is_ativo:
         ja_tem = db.get(ClienteEndereco, (cliente.id_cliente, endereco_existente.id_endereco))
         if ja_tem is not None:

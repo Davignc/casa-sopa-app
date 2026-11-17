@@ -23,3 +23,7 @@ class StatusBackup(BaseModel):
     motivo_alerta: str | None
     retencao: int
     arquivos: list[ArquivoBackup]
+
+
+class LogoRead(BaseModel):
+    personalizada: bool

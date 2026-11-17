@@ -11,6 +11,7 @@ from app.schemas.produto import (
     MovimentacaoRead,
     MovimentacaoResultado,
     ProdutoRead,
+    ResumoMovimentacoes,
     SaidaEstoque,
 )
 from app.services import estoque as estoque_service
@@ -59,6 +60,21 @@ def listar_movimentacoes(
         offset=offset,
     )
     return Pagina[MovimentacaoRead](itens=itens, total=total, limit=limit, offset=offset)
+
+
+@router.get("/movimentacoes/resumo", response_model=ResumoMovimentacoes)
+def resumo_das_movimentacoes(
+    db: DbSession,
+    _admin: AdminAtual,
+    id_produto: Annotated[int | None, Query(gt=0)] = None,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
+    agrupar: Literal["dia", "semana", "mes"] | None = None,
+) -> ResumoMovimentacoes:
+    """Entradas e saídas ao longo do tempo (gráfico). Sem datas, usa os últimos 30 dias."""
+    return estoque_service.resumo_movimentacoes(
+        db, id_produto=id_produto, data_inicio=data_inicio, data_fim=data_fim, agrupar=agrupar
+    )
 
 
 @router.get("/alertas", response_model=list[ProdutoRead])

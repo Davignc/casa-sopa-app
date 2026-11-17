@@ -138,3 +138,13 @@ ViaCupom = Literal["interna", "entregador", "cliente", "todas"]
 
 # Reexportado para os filtros de listagem.
 Periodo = tuple[date | None, date | None]
+
+
+class ContagemPedidos(BaseModel):
+    """Quantos pedidos há em cada situação, para o mesmo filtro (abas da tela de pedidos)."""
+
+    todos: int
+    em_aberto: int
+    confirmado: int
+    entregue: int
+    cancelado: int

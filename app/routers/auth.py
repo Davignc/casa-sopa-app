@@ -1,7 +1,7 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api.deps import DbSession, TokenAtual
@@ -9,12 +9,42 @@ from app.core import protecao
 from app.core.errors import NaoAutenticadoError
 from app.core.security import criar_access_token, versao_da_senha
 from app.core.validators import normalizar_email
+from app.schemas.recuperacao import RecuperarSenha, RedefinirSenha
 from app.schemas.token import Token
 from app.schemas.usuario import LoginRequest
+from app.services import recuperacao
 from app.services import usuario as usuario_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger("casa_sopa.auth")
+
+
+@router.post("/recuperar-senha", status_code=202)
+def recuperar_senha(
+    request: Request, dados: RecuperarSenha, db: DbSession, tarefas: BackgroundTasks
+) -> dict[str, str]:
+    ip = _ip_do_cliente(request)
+    chave = normalizar_email(str(dados.email))
+    for limitador, valor in (
+        (protecao.limitador_recuperacao_ip, ip),
+        (protecao.limitador_recuperacao_email, chave),
+    ):
+        limitador.verificar(valor)
+        limitador.registrar_falha(valor)
+    recuperacao.verificar_configuracao()
+    usuario = usuario_service.buscar_por_email(db, chave)
+    if usuario and usuario.is_ativo:
+        tarefas.add_task(recuperacao.enviar_email, usuario.email, recuperacao.criar_token(usuario))
+    return {"detail": recuperacao.MENSAGEM}
+
+
+@router.post("/redefinir-senha", status_code=204)
+def redefinir_senha(request: Request, dados: RedefinirSenha, db: DbSession) -> Response:
+    ip = _ip_do_cliente(request)
+    protecao.limitador_redefinicao.verificar(ip)
+    protecao.limitador_redefinicao.registrar_falha(ip)
+    recuperacao.redefinir(db, dados.token, dados.senha)
+    return Response(status_code=204)
 
 
 def _ip_do_cliente(request: Request) -> str:

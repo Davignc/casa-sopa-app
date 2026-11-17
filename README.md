@@ -18,13 +18,13 @@ interno**: só a administradora e as vendedoras acessam.
 | Pedidos, status e cupom em PDF | RF11–RF16, RF26 | ✅ |
 | Dashboard e relatórios | RF27–RF28 | ✅ |
 | Backup semanal | RNF03 | ✅ |
-| Front-end | — | ⬜ próxima etapa |
+| Front-end (React): todas as telas, gráficos e troca de logo | — | ✅ |
 
 ## Stack
 
 Python 3.12 · [uv](https://docs.astral.sh/uv/) · FastAPI · SQLAlchemy 2 + Alembic · PostgreSQL
 (psycopg 3) · bcrypt + PyJWT · ReportLab (PDF) · openpyxl (planilhas) · APScheduler (backup) ·
-pytest · Ruff · mypy.
+pytest · Ruff · mypy. Front-end: React 19 · TypeScript · Vite · Tailwind · TanStack Query · Recharts · Vitest.
 
 ## Começando
 
@@ -47,6 +47,51 @@ uv run fastapi dev app/main.py   # http://localhost:8000/docs
 `DATABASE_URL=sqlite:///./casa_sopa_dev.db` e `TEST_DATABASE_URL=sqlite://`. Ele não impõe o
 tamanho de `VARCHAR` nem guarda fuso; a entrega deve usar PostgreSQL e a suíte deve passar nos dois.
 
+## Front-end
+
+**Novas funções:** recuperação de senha por e-mail via Gmail e importação de
+planilhas de clientes, produtos e vendas antigas, com prévia e confirmação pela
+administradora. Veja a configuração, os modelos e o vídeo em
+[Recuperação, importação e vídeo](docs/RECUPERACAO_IMPORTACAO_VIDEO.md).
+Depois de atualizar, aplique `uv run alembic upgrade head`.
+
+O sistema já vem **compilado** em `app/web` e é servido pelo próprio backend: depois de `uv run fastapi dev app/main.py`,
+abra <http://localhost:8000>. **Não precisa de Node.js** para usar. Página e API ficam na mesma origem (sem CORS).
+
+| Tela | Quem | O que faz |
+|---|---|---|
+| Entrar | todos | Login com bloqueio de tentativas; logo da ONG |
+| Início | todos | Administradora: resumo do mês e gráficos. Vendedora: andamento dos pedidos e atalhos. Estoque baixo e últimos pedidos |
+| Clientes | todos | Cadastro, endereços (buscar um já registrado ou criar novo), histórico de compras |
+| Pedidos | todos | Abas com contagem, mudança de situação com confirmação, cupom em PDF, novo pedido e edição |
+| Produtos | todos | Cadastro e alerta de estoque baixo. **Administradora:** entradas, saídas e histórico de movimentações de cada produto, com filtros e gráfico |
+| Relatórios | administradora | Gráficos que mudam conforme período, vendedora e agrupamento; comissões; exportar Excel/CSV |
+| Usuários | administradora | Cadastro, edição, inativação e troca de senha |
+| Configurações | administradora | Troca da logo e situação/execução do backup |
+
+Pontos de comportamento:
+
+- **Endereço:** ao cadastrar cliente ou pedido, dá para *buscar um endereço já registrado* (de qualquer cliente) ou *cadastrar um
+  novo*. Ao escolher um registrado, aparece a seção "Dados deste endereço para este cliente" (número, complemento, referência
+  e apelido), que é a relação cliente-endereço. No pedido, o endereço novo é guardado também no cadastro do cliente.
+- **Gráficos:** vêm de `/relatorios/analise` e de `/estoque/movimentacoes/resumo`; mudar qualquer filtro refaz a consulta.
+- **Logo:** a administradora troca em Configurações (PNG, JPG ou WebP, até 2 MB; o servidor confere o conteúdo e regrava o
+  arquivo). Vale no menu, no login, na aba do navegador e no cupom impresso.
+- **Segurança:** o token fica em `sessionStorage` (some ao fechar a aba); a página só carrega scripts do próprio servidor
+  (CSP restritiva); as telas restritas também são barradas no servidor, que é quem decide.
+- **Não incluído:** o protótipo mostrava *Caixa*, *taxa de entrega*, *valor recebido* e *data/hora de entrega*. Não estão nos
+  requisitos nem no modelo de dados (`casa_da_sopa_banco.sql`), então não foram feitos.
+
+### Alterar o front (precisa de Node.js 20+)
+
+```bash
+cd frontend
+npm install
+npm run dev      # http://localhost:5173, conversando com a API em :8000 (rode o backend junto)
+npm test         # testes (Vitest)
+npm run build    # compila para ../app/web  (commite o resultado)
+```
+
 ## API
 
 Documentação interativa em `/docs` (desligada com `ENVIRONMENT=production`). Todas as rotas,
@@ -58,13 +103,14 @@ exceto login e `/health`, exigem `Authorization: Bearer <token>`. **Admin** = ad
 | Autenticação | `POST /auth/login` (form) · `POST /auth/login/json` · `POST /auth/logout` · `GET /usuarios/me` | Todos |
 | Usuários | `POST/GET /usuarios` · `GET/PATCH/DELETE /usuarios/{id}` · `POST /usuarios/{id}/reativar` | Admin |
 | Clientes | `POST/GET /clientes` · `GET/PATCH/DELETE /clientes/{id}` · `POST .../reativar` | Todos |
-| Endereços | `POST /clientes/{id}/enderecos` · `PATCH/DELETE /clientes/{id}/enderecos/{id_endereco}` | Todos |
+| Endereços | `GET /enderecos?busca=` (já registrados) · `POST /clientes/{id}/enderecos` (novo, ou `id_endereco` de um existente) · `PATCH/DELETE /clientes/{id}/enderecos/{id_endereco}` | Todos |
 | Produtos | `POST/GET /produtos` · `GET/PATCH/DELETE /produtos/{id}` · `POST .../reativar` | Todos |
 | Estoque | `GET /estoque/alertas` | Todos |
-| | `POST /estoque/entradas` · `POST /estoque/saidas` · `GET /estoque/movimentacoes` | Admin |
-| Pedidos | `POST/GET /pedidos` · `GET/PATCH/DELETE /pedidos/{id}` · `POST /pedidos/{id}/status` · `GET /pedidos/{id}/cupom` | Todos |
-| Relatórios | `GET /relatorios/dashboard` · `/relatorios/vendas` · `/relatorios/vendas/pedidos` · `/relatorios/vendas/exportar` | Admin |
-| Sistema | `GET/POST /sistema/backup` | Admin |
+| | `POST /estoque/entradas` · `POST /estoque/saidas` · `GET /estoque/movimentacoes` · `GET /estoque/movimentacoes/resumo` | Admin |
+| Pedidos | `POST/GET /pedidos` · `GET /pedidos/contagem` (por situação) · `GET/PATCH/DELETE /pedidos/{id}` · `POST /pedidos/{id}/status` · `GET /pedidos/{id}/cupom` | Todos |
+| Relatórios | `GET /relatorios/dashboard` · `/relatorios/analise` (gráficos) · `/relatorios/vendas` · `/relatorios/vendas/pedidos` · `/relatorios/vendas/exportar` | Admin |
+| Sistema | `GET/POST /sistema/backup` · `POST/DELETE /sistema/logo` · `GET /sistema/logo/situacao` | Admin |
+| | `GET /sistema/logo` (a tela de login precisa dela) | Pública |
 
 Listagens são paginadas (`limit` até 100, `offset`) e devolvem `{itens, total, limit, offset}`.
 Erros vêm como `{"detail": "mensagem em português"}`; 401 sem login, 403 sem permissão, 404 não
@@ -135,6 +181,12 @@ Requer o `pg_dump` instalado (ou `PG_DUMP_PATH`). A senha vai por variável de a
 
 Os arquivos têm **todos os dados**, inclusive os hashes de senha: proteja a pasta e copie-os para fora do servidor.
 
+## Logo e arquivos enviados
+
+A logo personalizada fica em `UPLOADS_DIR` (padrão `uploads/`, fora do Git). Sem ela, vale a logo padrão em
+`app/assets/logo-padrao.png`. O envio aceita só PNG, JPG e WebP, confere o **conteúdo** (não o nome nem o tipo informado),
+recusa SVG e imagens enormes e regrava como PNG de até 512 px, descartando metadados.
+
 ## Modelo de dados
 
 Oito tabelas conforme `casa_da_sopa_banco.sql` (colunas em `snake_case`): `usuario`, `produto`,
@@ -150,6 +202,28 @@ uv run alembic upgrade head | downgrade -1 | check
 
 ## Testes e qualidade
 
+Relatórios incluem pedidos de vendedoras e administradoras. O filtro **Perfil de usuário**
+permite selecionar só vendedoras, só administradoras ou todos; **Responsável** filtra uma
+pessoa, inclusive inativa. Gráficos, totais e exportações CSV/Excel usam os mesmos filtros.
+Administradoras não recebem comissão. A API mantém `id_vendedora`, `vendedoras` e
+`por_vendedora` por compatibilidade, aceitando também administradoras; `cargo` é opcional.
+
+Somente a vendedora responsável pelo pedido e as administradoras podem editar, excluir
+ou alterar seu status. A autorização é conferida no servidor antes de modificar dados
+ou estoque, inclusive quando a chamada é feita diretamente à API.
+
+A interface oferece modo escuro no login e no cabeçalho, com preferência salva neste
+navegador; sem escolha salva, acompanha o sistema. Há foco visível, atalho para o conteúdo,
+abas operáveis por setas/Home/End, seleção de pedidos por teclado e diálogos/menu móvel
+com foco contido e fechamento por Escape. Animações respeitam movimento reduzido.
+
+Formulários de clientes, usuários, pedidos e login apresentam a finalidade do uso de
+dados e orientações de atendimento. Esses avisos são medidas de transparência, não uma
+certificação de conformidade integral com a LGPD. A administração deve definir o canal
+de atendimento, a base legal aplicável e os prazos de guarda conforme suas operações.
+Inativação mantém o histórico e não equivale à exclusão. Referência:
+[orientações da ANPD](https://www.gov.br/anpd/pt-br/acesso-a-informacao/perguntas-frequentes).
+
 ```bash
 uv run pytest                                        # toda a suíte
 uv run pytest --cov=app --cov-report=term-missing    # com cobertura
@@ -158,8 +232,9 @@ uv run mypy app/                                     # tipos
 uv run pre-commit install                            # lint/format a cada commit
 ```
 
-A suíte (~620 testes) roda em PostgreSQL e em SQLite. `test_app.py` varre todas as rotas e falha se
-alguma de dados ficar sem login.
+A suíte do backend (~760 testes) roda em PostgreSQL e em SQLite; o front tem ~315 (`npm test`).
+`test_app.py` varre **todas as operações da API** (lidas do OpenAPI) e falha se alguma de dados ficar sem login.
+`test_contrato_front.py` lê o código do front e falha se ele chamar uma rota que a API não tem.
 
 ## Estrutura
 
@@ -168,10 +243,11 @@ app/
 ├── main.py        # app, CORS, cabeçalhos, ciclo de vida (backup)
 ├── cli.py         # criar-admin
 ├── api/deps.py    # sessão, usuário atual, permissões (AdminAtual, OperadorAtual)
-├── core/          # config, segurança, proteções, erros, validadores, fuso, formatação
+├── core/          # config, segurança, proteções, erros, validadores, fuso, períodos, SPA
 ├── models/        # tabelas  ·  schemas/ entrada e saída  ·  routers/ endpoints
 └── services/      # regras de negócio (pedido, estoque, relatório, cupom, backup...)
 alembic/versions/  # migrations  ·  tests/
+frontend/          # código-fonte do front (React)  ·  app/web/  # front compilado, servido pelo backend
 ```
 
 ## Variáveis de ambiente

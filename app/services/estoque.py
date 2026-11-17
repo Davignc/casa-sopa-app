@@ -14,7 +14,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import ConflitoError, NaoEncontradoError, RegraInvalidaError
-from app.core.tempo import fim_do_dia_exclusivo_utc, inicio_do_dia_utc
+from app.core.periodos import (
+    Agrupamento,
+    escolher_agrupamento,
+    gerar_baldes,
+    inicio_do_balde,
+    janela,
+)
+from app.core.tempo import fim_do_dia_exclusivo_utc, inicio_do_dia_utc, para_local
 from app.models.movimentacao import (
     REF_AJUSTE_MANUAL,
     TIPO_ENTRADA,
@@ -27,7 +34,9 @@ from app.schemas.produto import (
     EntradaEstoque,
     MovimentacaoRead,
     MovimentacaoResultado,
+    PontoMovimentacao,
     ProdutoRead,
+    ResumoMovimentacoes,
     SaidaEstoque,
 )
 
@@ -199,4 +208,46 @@ def listar_alertas(db: Session) -> list[Produto]:
             .where(Produto.is_ativo.is_(True), Produto.estoque_atual <= Produto.estoque_minimo)
             .order_by(Produto.estoque_atual - Produto.estoque_minimo, Produto.nome)
         ).all()
+    )
+
+
+def resumo_movimentacoes(
+    db: Session,
+    *,
+    id_produto: int | None,
+    data_inicio: date | None,
+    data_fim: date | None,
+    agrupar: str | None,
+) -> ResumoMovimentacoes:
+    """Entradas e saídas por dia, semana ou mês, para o gráfico. Sem datas: últimos 30 dias."""
+    inicio, fim = janela(data_inicio, data_fim)
+    if id_produto is not None and db.get(Produto, id_produto) is None:
+        raise NaoEncontradoError("Produto não encontrado.")
+    agrupamento: Agrupamento = agrupar or escolher_agrupamento(inicio, fim)  # type: ignore[assignment]
+    filtros = [
+        Movimentacao.data_movimentacao >= inicio_do_dia_utc(inicio),
+        Movimentacao.data_movimentacao < fim_do_dia_exclusivo_utc(fim),
+    ]
+    if id_produto is not None:
+        filtros.append(Movimentacao.id_produto == id_produto)
+    linhas = db.execute(
+        select(
+            Movimentacao.data_movimentacao, Movimentacao.tipo_movimentacao, Movimentacao.quantidade
+        ).where(*filtros)
+    ).all()
+    baldes = {b: [0, 0] for b in gerar_baldes(inicio, fim, agrupamento)}
+    for momento, tipo, quantidade in linhas:
+        balde = inicio_do_balde(para_local(momento).date(), agrupamento)
+        if balde in baldes:
+            baldes[balde][0 if tipo == TIPO_ENTRADA else 1] += quantidade
+    entradas = sum(v[0] for v in baldes.values())
+    saidas = sum(v[1] for v in baldes.values())
+    return ResumoMovimentacoes(
+        periodo_inicio=inicio,
+        periodo_fim=fim,
+        agrupamento=agrupamento,
+        total_entradas=entradas,
+        total_saidas=saidas,
+        saldo_do_periodo=entradas - saidas,
+        serie=[PontoMovimentacao(inicio=b, entradas=v[0], saidas=v[1]) for b, v in baldes.items()],
     )

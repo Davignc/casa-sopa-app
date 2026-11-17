@@ -282,7 +282,7 @@ def test_vendedora_sem_percentual_tem_comissao_zero(client, headers_admin, cenar
     assert v["comissao_a_receber"] == "0.00"
 
 
-def test_vendedora_inexistente_ou_administradora_retorna_404(
+def test_responsavel_inexistente_retorna_404_e_administradora_e_aceita(
     client, headers_admin, db, admin_cadastrada
 ):
     admin = db.scalar(select(Usuario).where(Usuario.email == admin_cadastrada["email"]))
@@ -295,8 +295,73 @@ def test_vendedora_inexistente_ou_administradora_retorna_404(
         client.get(
             f"/relatorios/vendas?id_vendedora={admin.id_usuario}", headers=headers_admin
         ).status_code
-        == 404
+        == 200
     )
+
+
+@pytest.mark.parametrize(
+    "cargo,quantidade,valor",
+    [(None, 4, "147.70"), ("administradora", 1, "40.00"), ("vendedora", 3, "107.70")],
+)
+def test_filtro_cargo_consistente_em_resumo_graficos_pedidos_e_exportacao(
+    client, headers_admin, cenario, vendas, cargo, quantidade, valor
+):
+    pedido(client, headers_admin, cenario, [(cenario["a"], 4)], "entregue")
+    params = {"cargo": cargo} if cargo else {}
+    resumo = client.get("/relatorios/vendas", params=params, headers=headers_admin).json()
+    analise = client.get("/relatorios/analise", params=params, headers=headers_admin).json()
+    detalhes = client.get("/relatorios/vendas/pedidos", params=params, headers=headers_admin).json()
+    assert resumo["totais"]["quantidade_pedidos"] == quantidade
+    assert resumo["totais"]["valor_total"] == valor
+    assert analise["totais"] == resumo["totais"]
+    assert sum(p["pedidos"] for p in analise["serie"]) == quantidade
+    assert sum(analise["pedidos_por_status"][s] for s in ("confirmado", "entregue")) == quantidade
+    assert detalhes["total"] == quantidade
+    for linha in resumo["vendedoras"]:
+        if cargo:
+            assert linha["cargo"] == cargo
+        if linha["cargo"] == "administradora":
+            assert linha["comissao_percentual"] is None
+            assert linha["comissao_a_receber"] == "0.00"
+    for formato in ("csv", "xlsx"):
+        resposta = client.get(
+            "/relatorios/vendas/exportar",
+            params={**params, "formato": formato},
+            headers=headers_admin,
+        )
+        assert resposta.status_code == 200
+        if formato == "csv":
+            linhas = list(csv.reader(StringIO(resposta.content.decode("utf-8-sig")), delimiter=";"))
+            assert len(linhas) - 1 == quantidade
+        else:
+            pasta = load_workbook(BytesIO(resposta.content))
+            assert pasta["Pedidos"].max_row - 1 == quantidade
+
+
+def test_filtro_administradora_individual_e_cruzamento_de_cargo(
+    client, db, headers_admin, cenario, admin_cadastrada
+):
+    admin = db.scalar(select(Usuario).where(Usuario.email == admin_cadastrada["email"]))
+    pedido(client, headers_admin, cenario, [(cenario["a"], 2)], "confirmado")
+    params = {"id_vendedora": admin.id_usuario, "cargo": "administradora"}
+    for rota in ("/relatorios/vendas", "/relatorios/analise"):
+        resposta = client.get(rota, params=params, headers=headers_admin)
+        assert resposta.status_code == 200
+        assert resposta.json()["totais"]["valor_total"] == "20.00"
+    params["cargo"] = "vendedora"
+    resposta = client.get("/relatorios/vendas", params=params, headers=headers_admin)
+    assert resposta.json()["vendedoras"] == []
+    assert resposta.json()["totais"]["quantidade_pedidos"] == 0
+
+
+def test_relatorio_cargo_invalido_retorna_422(client, headers_admin):
+    for rota in (
+        "/relatorios/vendas",
+        "/relatorios/analise",
+        "/relatorios/vendas/pedidos",
+        "/relatorios/vendas/exportar",
+    ):
+        assert client.get(rota, params={"cargo": "outro"}, headers=headers_admin).status_code == 422
 
 
 def test_periodo_informado(client, db, headers_admin, vendas):
@@ -401,7 +466,7 @@ def test_exporta_xlsx_com_resumo_e_pedidos(client, headers_admin, vendas):
     pasta = _planilha(resposta)
     assert pasta.sheetnames == ["Resumo", "Pedidos"]
     resumo = list(pasta["Resumo"].values)
-    assert resumo[2][0] == "Vendedora"
+    assert resumo[2][0] == "Responsável"
     por_nome = {linha[0]: linha for linha in resumo[3:] if linha[0]}
     assert por_nome["Maria"][4] == 30.0
     assert por_nome["Joana"][5] == 3.89
@@ -419,7 +484,7 @@ def test_exporta_csv_para_excel_brasileiro(client, headers_admin, vendas):
     assert resposta.headers["content-type"].startswith("text/csv")
     assert resposta.content.startswith(b"\xef\xbb\xbf")  # BOM: acentos certos no Excel
     linhas = resposta.content.decode("utf-8-sig").strip().split("\r\n")
-    assert linhas[0] == "Pedido;Data;Vendedora;Cliente;Situação;Pagamento;Produtos;Total"
+    assert linhas[0] == "Pedido;Data;Responsável;Cliente;Situação;Pagamento;Produtos;Total"
     assert len(linhas) == 1 + 3
     assert any(linha.endswith(";77,70") for linha in linhas)  # decimal com vírgula
 

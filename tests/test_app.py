@@ -1,6 +1,7 @@
 """Configuração geral da aplicação: cabeçalhos de segurança, CORS, docs e ciclo de vida."""
 
 import importlib
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -130,17 +131,93 @@ def test_ciclo_de_vida_liga_e_desliga_o_agendador(monkeypatch):
     assert backup_service._agendador is None
 
 
+def _operacoes(app) -> list[tuple[str, str]]:
+    """(método, caminho) de TODAS as rotas, lidas do OpenAPI.
+
+    Atenção: `app.routes` não serve para isso. Nas versões novas do FastAPI ele guarda os
+    módulos como "roteadores incluídos" e não lista as rotas de cada um, então uma varredura
+    por ele só enxergaria /health e a documentação (e passaria sem testar nada).
+    """
+    operacoes = []
+    for caminho, metodos in app.openapi()["paths"].items():
+        for metodo in metodos:
+            if metodo.upper() in {"GET", "POST", "PATCH", "PUT", "DELETE"}:
+                operacoes.append((metodo.upper(), caminho))
+    return operacoes
+
+
+PUBLICAS = {
+    ("GET", "/health"),
+    ("POST", "/auth/login"),
+    ("POST", "/auth/login/json"),
+    ("POST", "/auth/recuperar-senha"),
+    ("POST", "/auth/redefinir-senha"),
+    ("GET", "/sistema/logo"),  # a tela de login precisa da logo antes de entrar
+}
+
+
+def test_a_varredura_enxerga_todas_as_rotas(client):
+    """Garante que a rede de segurança abaixo não está olhando para quase nada."""
+    operacoes = _operacoes(client.app)
+
+    assert len(operacoes) >= 50
+    for esperada in [
+        ("POST", "/pedidos"),
+        ("DELETE", "/usuarios/{id_usuario}"),
+        ("GET", "/relatorios/analise"),
+        ("POST", "/sistema/backup"),
+    ]:
+        assert esperada in operacoes
+    assert set(operacoes) >= PUBLICAS
+
+
 def test_todas_as_rotas_de_dados_exigem_autenticacao(client):
     """Rede de segurança: qualquer rota nova que esqueça o login derruba este teste."""
-    publicas = {"/health", "/auth/login", "/auth/login/json", "/docs", "/redoc", "/openapi.json",
-                "/docs/oauth2-redirect"}  # fmt: skip
-    for rota in client.app.routes:
-        caminho = getattr(rota, "path", "")
-        if caminho in publicas or not hasattr(rota, "methods"):
+    for metodo, caminho in _operacoes(client.app):
+        if (metodo, caminho) in PUBLICAS:
             continue
-        concreto = caminho.replace("{id_usuario}", "1").replace("{id_cliente}", "1")
-        concreto = concreto.replace("{id_produto}", "1").replace("{id_pedido}", "1")
-        concreto = concreto.replace("{id_endereco}", "1")
-        for metodo in rota.methods - {"HEAD", "OPTIONS"}:
-            resposta = client.request(metodo, concreto, json={})
-            assert resposta.status_code == 401, f"{metodo} {caminho} -> {resposta.status_code}"
+        concreto = re.sub(r"\{[^}]+\}", "1", caminho)
+        resposta = client.request(metodo, concreto, json={})
+        assert resposta.status_code == 401, f"{metodo} {caminho} -> {resposta.status_code}"
+
+
+def test_rotas_so_da_administradora_recusam_a_vendedora(client, headers_vendedora):
+    """Quem não é administradora recebe 403 nas áreas restritas (cobre todas de uma vez)."""
+    restritas = [
+        ("GET", "/usuarios"),
+        ("POST", "/usuarios"),
+        ("GET", "/usuarios/1"),
+        ("PATCH", "/usuarios/1"),
+        ("DELETE", "/usuarios/1"),
+        ("POST", "/usuarios/1/reativar"),
+        ("POST", "/estoque/entradas"),
+        ("POST", "/estoque/saidas"),
+        ("GET", "/estoque/movimentacoes"),
+        ("GET", "/estoque/movimentacoes/resumo"),
+        ("GET", "/relatorios/dashboard"),
+        ("GET", "/relatorios/analise"),
+        ("GET", "/relatorios/vendas"),
+        ("GET", "/relatorios/vendas/pedidos"),
+        ("GET", "/relatorios/vendas/exportar"),
+        ("GET", "/sistema/backup"),
+        ("POST", "/sistema/backup"),
+        ("POST", "/sistema/logo"),
+        ("DELETE", "/sistema/logo"),
+        ("GET", "/sistema/logo/situacao"),
+    ]
+    for metodo, caminho in restritas:
+        resposta = client.request(metodo, caminho, json={}, headers=headers_vendedora)
+        assert resposta.status_code == 403, f"{metodo} {caminho} -> {resposta.status_code}"
+
+    # e nenhuma rota restrita ficou de fora da lista acima
+    admin_ou_publica = {(m, c) for m, c in _operacoes(client.app)}
+    cobertas = {(m, re.sub(r"\d+", "{x}", c)) for m, c in restritas}
+    for metodo, caminho in admin_ou_publica:
+        if caminho.split("/")[1] in {"usuarios", "relatorios"} or caminho.startswith(
+            ("/estoque/entradas", "/estoque/saidas", "/estoque/movimentacoes", "/sistema")
+        ):
+            if (metodo, caminho) in PUBLICAS:
+                continue
+            assert (metodo, re.sub(r"\{[^}]+\}", "{x}", caminho)) in cobertas or caminho in {
+                "/usuarios/me"
+            }, f"rota restrita sem teste: {metodo} {caminho}"

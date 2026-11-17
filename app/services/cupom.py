@@ -8,8 +8,10 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import A5
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.platypus import (
     HRFlowable,
+    Image,
     KeepTogether,
     PageBreak,
     Paragraph,
@@ -62,9 +64,18 @@ def _data(momento: object) -> str:
     return para_local(momento).strftime("%d/%m/%Y %H:%M")  # type: ignore[arg-type]
 
 
-def _bloco_da_via(pedido: PedidoRead, via: str) -> list[object]:
+def _logo(logo: bytes | None) -> list[object]:
+    if not logo:
+        return []
+    largura, altura = ImageReader(BytesIO(logo)).getSize()
+    alto = 22 * mm
+    return [Image(BytesIO(logo), width=alto * largura / altura, height=alto), Spacer(1, 2 * mm)]
+
+
+def _bloco_da_via(pedido: PedidoRead, via: str, logo: bytes | None = None) -> list[object]:
     p = pedido
     elementos: list[object] = [
+        *_logo(logo),
         Paragraph(_t(NOME_DA_ONG), _TITULO),
         Paragraph("CUPOM NÃO FISCAL", _SUBTITULO),
         Spacer(1, 3 * mm),
@@ -131,7 +142,7 @@ def _bloco_da_via(pedido: PedidoRead, via: str) -> list[object]:
     return [KeepTogether(elementos)]
 
 
-def gerar_cupom_pdf(pedido: PedidoRead, via: str) -> bytes:
+def gerar_cupom_pdf(pedido: PedidoRead, via: str, logo: bytes | None = None) -> bytes:
     """Gera o PDF com uma página por via. ``via='todas'`` junta as três."""
     vias = ORDEM_DAS_VIAS if via == "todas" else (via,)
     buffer = BytesIO()
@@ -149,6 +160,6 @@ def gerar_cupom_pdf(pedido: PedidoRead, via: str) -> bytes:
     for indice, nome_da_via in enumerate(vias):
         if indice:
             paginas.append(PageBreak())
-        paginas += _bloco_da_via(pedido, nome_da_via)
+        paginas += _bloco_da_via(pedido, nome_da_via, logo)
     documento.build(paginas)
     return buffer.getvalue()

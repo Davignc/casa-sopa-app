@@ -40,6 +40,7 @@ from app.models.venda import (
 )
 from app.schemas.pedido import (
     ClientePedido,
+    ContagemPedidos,
     EnderecoPedido,
     ItemEntrada,
     ItemRead,
@@ -126,22 +127,15 @@ def montar(venda: Venda) -> PedidoRead:
     )
 
 
-def listar(
-    db: Session,
+def _filtros_de_listagem(
     *,
-    status: str | None,
     id_cliente: int | None,
     id_vendedora: int | None,
     busca: str | None,
     data_inicio: date | None,
     data_fim: date | None,
-    limit: int,
-    offset: int,
-) -> tuple[list[Venda], int]:
-    """RF14: do mais recente para o mais antigo. Datas valem para a data da venda."""
+) -> list[Any]:
     filtros: list[Any] = []
-    if status is not None:
-        filtros.append(Venda.status == status)
     if id_cliente is not None:
         filtros.append(Venda.id_cliente == id_cliente)
     if id_vendedora is not None:
@@ -160,6 +154,31 @@ def listar(
             filtros.append(or_(por_cliente, Venda.id_venda == int(termo)))
         else:
             filtros.append(por_cliente)
+    return filtros
+
+
+def listar(
+    db: Session,
+    *,
+    status: str | None,
+    id_cliente: int | None,
+    id_vendedora: int | None,
+    busca: str | None,
+    data_inicio: date | None,
+    data_fim: date | None,
+    limit: int,
+    offset: int,
+) -> tuple[list[Venda], int]:
+    """RF14: do mais recente para o mais antigo. Datas valem para a data da venda."""
+    filtros = _filtros_de_listagem(
+        id_cliente=id_cliente,
+        id_vendedora=id_vendedora,
+        busca=busca,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
+    if status is not None:
+        filtros.append(Venda.status == status)
 
     total = db.scalar(select(func.count()).select_from(Venda).where(*filtros)) or 0
     vendas = db.scalars(
@@ -170,6 +189,32 @@ def listar(
         .offset(offset)
     ).all()
     return list(vendas), total
+
+
+def contar_por_status(
+    db: Session,
+    *,
+    id_cliente: int | None,
+    id_vendedora: int | None,
+    busca: str | None,
+    data_inicio: date | None,
+    data_fim: date | None,
+) -> ContagemPedidos:
+    """Contagem por situação com os mesmos filtros da listagem (menos o status)."""
+    filtros = _filtros_de_listagem(
+        id_cliente=id_cliente,
+        id_vendedora=id_vendedora,
+        busca=busca,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
+    linhas = db.execute(
+        select(Venda.status, func.count()).where(*filtros).group_by(Venda.status)
+    ).all()
+    por_status: dict[str, int] = {status: int(qtd) for status, qtd in linhas}
+    situacoes = (STATUS_EM_ABERTO, STATUS_CONFIRMADO, STATUS_ENTREGUE, STATUS_CANCELADO)
+    contagem = {s: por_status.get(s, 0) for s in situacoes}
+    return ContagemPedidos(todos=sum(contagem.values()), **contagem)
 
 
 # --- validações compartilhadas -----------------------------------------------
@@ -262,11 +307,22 @@ def criar(db: Session, dados: PedidoCreate, ator: Usuario) -> Venda:
     return obter_ou_404(db, venda.id_venda)
 
 
-def atualizar(db: Session, id_pedido: int, dados: PedidoUpdate) -> Venda:
+def verificar_permissao(venda: Venda, ator: Usuario) -> None:
+    """Somente a responsável pelo pedido e as administradoras podem alterá-lo."""
+    if ator.cargo != CARGO_ADMINISTRADORA and (
+        ator.cargo != CARGO_VENDEDORA or venda.id_usuario != ator.id_usuario
+    ):
+        raise AcessoNegadoError(
+            "Somente a responsável pelo pedido ou uma administradora pode alterá-lo."
+        )
+
+
+def atualizar(db: Session, id_pedido: int, dados: PedidoUpdate, ator: Usuario) -> Venda:
     """RF12. Em aberto: tudo editável. Confirmado: só pagamento, endereço e observação
     (mexer nos produtos exigiria acertar o estoque: cancele e refaça). Entregue e
     cancelado são definitivos. A vendedora responsável nunca muda (RN10)."""
     venda = obter_ou_404(db, id_pedido, travar=True)
+    verificar_permissao(venda, ator)
     if venda.status in (STATUS_ENTREGUE, STATUS_CANCELADO):
         raise ConflitoError(f"Pedido {venda.status} não pode mais ser alterado.")
     campos = dados.model_dump(exclude_unset=True)
@@ -300,9 +356,10 @@ def atualizar(db: Session, id_pedido: int, dados: PedidoUpdate) -> Venda:
     return obter_ou_404(db, id_pedido)
 
 
-def excluir(db: Session, id_pedido: int) -> None:
+def excluir(db: Session, id_pedido: int, ator: Usuario) -> None:
     """RF13/RN11: só pedidos «em aberto» (que nunca mexeram no estoque)."""
     venda = obter_ou_404(db, id_pedido, travar=True)
+    verificar_permissao(venda, ator)
     if venda.status != STATUS_EM_ABERTO:
         raise ConflitoError("Só é possível excluir pedidos em aberto.")
     db.delete(venda)
@@ -316,6 +373,7 @@ def excluir(db: Session, id_pedido: int) -> None:
 def alterar_status(db: Session, id_pedido: int, novo: str, ator: Usuario) -> Venda:
     """RF26 + RF24: confirmar baixa o estoque; cancelar pedido confirmado devolve."""
     venda = obter_ou_404(db, id_pedido, travar=True)
+    verificar_permissao(venda, ator)
     atual = venda.status
     if novo == atual:
         raise ConflitoError(f"O pedido já está {atual}.")

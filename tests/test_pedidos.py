@@ -86,6 +86,73 @@ def mudar(client, headers, id_, status):
     return client.post(f"/pedidos/{id_}/status", json={"status": status}, headers=headers)
 
 
+@pytest.mark.parametrize("origem", ["vendedora", "administradora"])
+@pytest.mark.parametrize("acao", ["editar", "excluir", "confirmar", "cancelar", "entregar"])
+def test_outra_vendedora_nao_altera_pedido_nem_estoque(
+    client, db, h, headers_admin, cenario, origem, acao
+):
+    from app.schemas.usuario import UsuarioCreate
+    from app.services.usuario import criar_usuario
+
+    criar_usuario(
+        db,
+        UsuarioCreate(
+            nome="Outra vendedora",
+            email="outra@example.org",
+            telefone="16977776666",
+            cargo="vendedora",
+            senha="senhaForte123",
+        ),
+    )
+    token = client.post(
+        "/auth/login/json",
+        json={
+            "email": "outra@example.org",
+            "senha": "senhaForte123",
+        },
+    ).json()["access_token"]
+    outra = {"Authorization": f"Bearer {token}"}
+    dona = h if origem == "vendedora" else headers_admin
+    p = criar(client, dona, cenario).json()
+    id_ = p["id_pedido"]
+    if acao == "entregar":
+        assert mudar(client, dona, id_, "confirmado").status_code == 200
+    antes = estoque(db, cenario["a"])
+    movimentos = db.scalar(select(func.count()).select_from(Movimentacao))
+    if acao == "editar":
+        resposta = client.patch(f"/pedidos/{id_}", json={"observacao": "Indevida"}, headers=outra)
+    elif acao == "excluir":
+        resposta = client.delete(f"/pedidos/{id_}", headers=outra)
+    else:
+        destino = {"confirmar": "confirmado", "cancelar": "cancelado", "entregar": "entregue"}[acao]
+        resposta = mudar(client, outra, id_, destino)
+    assert resposta.status_code == 403
+    atual = client.get(f"/pedidos/{id_}", headers=dona).json()
+    assert atual["status"] == ("confirmado" if acao == "entregar" else "em_aberto")
+    assert atual["observacao"] is None
+    assert estoque(db, cenario["a"]) == antes
+    assert db.scalar(select(func.count()).select_from(Movimentacao)) == movimentos
+
+
+@pytest.mark.parametrize("ator", ["responsavel", "administradora"])
+def test_responsavel_e_admin_editam_confirmam_cancelam_e_excluem(
+    client, h, headers_admin, cenario, ator
+):
+    p = criar(client, h, cenario).json()
+    headers = h if ator == "responsavel" else headers_admin
+    id_ = p["id_pedido"]
+    assert (
+        client.patch(
+            f"/pedidos/{id_}", json={"observacao": "Autorizada"}, headers=headers
+        ).status_code
+        == 200
+    )
+    assert mudar(client, headers, id_, "confirmado").status_code == 200
+    assert mudar(client, headers, id_, "cancelado").status_code == 200
+    outro = criar(client, h, cenario).json()["id_pedido"]
+    assert client.delete(f"/pedidos/{outro}", headers=headers).status_code == 204
+
+
 # --- permissões ----------------------------------------------------------------
 
 

@@ -39,6 +39,24 @@ class EnderecoEntrada(_Base):
         return normalizar_cep(v)
 
 
+class VinculoExistente(_Base):
+    """Liga o cliente a um endereço que JÁ está registrado no sistema (achado na busca).
+
+    Rua, bairro, cidade e CEP já existem; aqui só vão os dados do vínculo (RM04).
+    """
+
+    id_endereco: int = Field(gt=0)
+    numero: str = Field(min_length=1, max_length=10, description='Aceita "123A" e "S/N"')
+    complemento: str = Field(default="", max_length=50)
+    referencia: str = Field(default="", max_length=50)
+    apelido: str | None = Field(default=None, min_length=1, max_length=50)
+    principal: bool = False
+
+
+# Novo endereço completo OU vínculo com um endereço existente.
+EnderecoDoCliente = EnderecoEntrada | VinculoExistente
+
+
 class EnderecoVinculoUpdate(_Base):
     """Dados do vínculo cliente-endereço. A rua/bairro/cidade não mudam aqui (veja a rota)."""
 
@@ -61,7 +79,7 @@ class EnderecoVinculoUpdate(_Base):
 class ClienteCreate(_Base):
     nome: str = Field(min_length=1, max_length=150)
     telefone: str = Field(min_length=1, max_length=20)
-    enderecos: list[EnderecoEntrada] = Field(default_factory=list, max_length=10)
+    enderecos: list[EnderecoDoCliente] = Field(default_factory=list, max_length=10)
 
     @field_validator("telefone")
     @classmethod
@@ -120,15 +138,28 @@ class ResponsavelRead(BaseModel):
 
 
 class ClienteResumo(BaseModel):
-    """Linha da listagem (RF10): nome, telefone e endereço principal."""
+    """Linha da listagem (RF10): nome, telefone, endereço principal e quem cadastrou."""
 
     id_cliente: int
     nome: str
     telefone: str
     is_ativo: bool
     endereco_principal: EnderecoRead | None
+    cadastrado_por: ResponsavelRead
 
 
 class ClienteRead(ClienteResumo):
-    cadastrado_por: ResponsavelRead
     enderecos: list[EnderecoRead]
+
+
+class EnderecoBusca(BaseModel):
+    """Endereço físico já registrado (resultado da busca). Sem número: ele é de cada cliente."""
+
+    id_endereco: int
+    cep: str
+    cidade: str
+    bairro: str
+    tipo_logradouro: str
+    nome_logradouro: str
+    descricao: str
+    quantidade_clientes: int

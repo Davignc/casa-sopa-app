@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal, Self
 
@@ -88,3 +88,21 @@ class MovimentacaoRead(BaseModel):
 class MovimentacaoResultado(BaseModel):
     movimentacao: MovimentacaoRead
     produto: ProdutoRead
+
+
+class PontoMovimentacao(BaseModel):
+    inicio: date
+    entradas: int
+    saidas: int
+
+
+class ResumoMovimentacoes(BaseModel):
+    """Entradas e saídas ao longo do tempo (gráfico da tela de movimentações do produto)."""
+
+    periodo_inicio: date
+    periodo_fim: date
+    agrupamento: str
+    total_entradas: int
+    total_saidas: int
+    saldo_do_periodo: int
+    serie: list[PontoMovimentacao]

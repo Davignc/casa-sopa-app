@@ -24,6 +24,7 @@ class Dashboard(BaseModel):
 class ResumoVendedora(BaseModel):
     id_usuario: int
     nome: str
+    cargo: str = "vendedora"
     is_ativo: bool
     comissao_percentual: Decimal | None
     quantidade_pedidos: int
@@ -47,3 +48,35 @@ class RelatorioVendas(BaseModel):
     periodo: PeriodoRead
     vendedoras: list[ResumoVendedora]
     totais: TotaisVendas
+
+
+class PontoSerie(BaseModel):
+    """Um ponto do gráfico de vendas ao longo do tempo (dia, semana ou mês)."""
+
+    inicio: date
+    pedidos: int
+    faturamento: Decimal
+
+
+class ItemRanking(BaseModel):
+    """`quantidade` = unidades vendidas (produtos) ou número de pedidos (demais)."""
+
+    id: int | None
+    nome: str
+    quantidade: int
+    valor: Decimal
+
+
+class Analise(BaseModel):
+    """Tudo o que os gráficos precisam, de uma vez, para o mesmo filtro (RF27, RF28)."""
+
+    periodo: PeriodoRead
+    agrupamento: str
+    totais: TotaisVendas
+    serie: list[PontoSerie]
+    pedidos_por_status: dict[str, int]
+    por_forma_pagamento: list[ItemRanking]
+    por_vendedora: list[ResumoVendedora]
+    top_produtos: list[ItemRanking]
+    top_clientes: list[ItemRanking]
+    por_bairro: list[ItemRanking]

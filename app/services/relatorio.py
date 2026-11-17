@@ -21,9 +21,20 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.errors import NaoEncontradoError, RegraInvalidaError
+from app.core.periodos import (
+    DIAS_PADRAO,
+    Agrupamento,
+    gerar_baldes,
+    inicio_do_balde,
+    janela,
+)
+from app.core.periodos import escolher_agrupamento as escolher_agrupamento
 from app.core.tempo import fim_do_dia_exclusivo_utc, hoje_local, inicio_do_dia_utc, para_local
+from app.models.cliente import Cliente
+from app.models.endereco import Endereco
 from app.models.item_venda import ItemVenda
-from app.models.usuario import CARGO_VENDEDORA, Usuario
+from app.models.produto import Produto
+from app.models.usuario import CARGOS, CARGO_VENDEDORA, Usuario
 from app.models.venda import (
     STATUS,
     STATUS_CONFIRMADO,
@@ -31,8 +42,11 @@ from app.models.venda import (
     Venda,
 )
 from app.schemas.relatorio import (
+    Analise,
     Dashboard,
+    ItemRanking,
     PeriodoRead,
+    PontoSerie,
     RelatorioVendas,
     ResumoVendedora,
     TotaisVendas,
@@ -40,21 +54,11 @@ from app.schemas.relatorio import (
 from app.services import pedido as pedido_service
 
 STATUS_DE_VENDA = (STATUS_CONFIRMADO, STATUS_ENTREGUE)
-DIAS_DO_DASHBOARD = 30
-MAX_DIAS_DO_PERIODO = 366
+DIAS_DO_DASHBOARD = DIAS_PADRAO
 MAX_LINHAS_EXPORTACAO = 20_000
+MAX_LINHAS_ANALISE = 100_000
+TOP = 10
 _CENTAVOS = Decimal("0.01")
-
-
-def janela(inicio: date | None, fim: date | None) -> tuple[date, date]:
-    """Período pedido, ou os últimos 30 dias (hoje incluído) se não vier nada."""
-    fim = fim or hoje_local()
-    inicio = inicio or (fim - timedelta(days=DIAS_DO_DASHBOARD - 1))
-    if inicio > fim:
-        raise RegraInvalidaError("A data inicial não pode ser depois da data final.")
-    if (fim - inicio).days >= MAX_DIAS_DO_PERIODO:
-        raise RegraInvalidaError("O período não pode passar de 1 ano.")
-    return inicio, fim
 
 
 def _limites(inicio: date, fim: date) -> list[Any]:
@@ -101,9 +105,10 @@ def dashboard(db: Session) -> Dashboard:
 
 
 def _agregar(
-    db: Session, inicio: date, fim: date, id_vendedora: int | None
+    db: Session, inicio: date, fim: date, id_vendedora: int | None, cargo: str | None = None
 ) -> list[ResumoVendedora]:
     filtros = [*_limites(inicio, fim), Venda.status.in_(STATUS_DE_VENDA)]
+    filtros.extend(_filtro_cargo(cargo))
     if id_vendedora is not None:
         filtros.append(Venda.id_usuario == id_vendedora)
 
@@ -122,7 +127,11 @@ def _agregar(
         )
     }
 
-    ids = {p[0] for p in pedidos} | ({id_vendedora} if id_vendedora is not None else set())
+    ids = {p[0] for p in pedidos}
+    if id_vendedora is not None:
+        responsavel = _vendedora_ou_404(db, id_vendedora)
+        if cargo is None or responsavel.cargo == cargo:
+            ids.add(id_vendedora)
     if not ids:
         return []
     usuarios = {
@@ -137,7 +146,8 @@ def _agregar(
     }  # fmt: skip
     for id_usuario, status, qtd, valor in pedidos:
         valor = Decimal(valor or 0)
-        comissao = _comissao(valor, usuarios[id_usuario].comissao)
+        usuario = usuarios[id_usuario]
+        comissao = _comissao(valor, usuario.comissao if usuario.cargo == CARGO_VENDEDORA else None)
         linha = linhas[id_usuario]
         linha["qtd"] += qtd
         linha["unid"] += unidades.get((id_usuario, status), 0)
@@ -149,8 +159,11 @@ def _agregar(
         ResumoVendedora(
             id_usuario=i,
             nome=usuarios[i].nome,
+            cargo=usuarios[i].cargo,
             is_ativo=usuarios[i].is_ativo,
-            comissao_percentual=usuarios[i].comissao,
+            comissao_percentual=(
+                usuarios[i].comissao if usuarios[i].cargo == CARGO_VENDEDORA else None
+            ),
             quantidade_pedidos=linha["qtd"],
             produtos_vendidos=linha["unid"],
             valor_total=linha["valor"].quantize(_CENTAVOS),
@@ -174,19 +187,32 @@ def _somar(resumos: list[ResumoVendedora]) -> TotaisVendas:
 
 def _vendedora_ou_404(db: Session, id_vendedora: int) -> Usuario:
     usuario = db.get(Usuario, id_vendedora)
-    if usuario is None or usuario.cargo != CARGO_VENDEDORA:
-        raise NaoEncontradoError("Vendedora não encontrada.")
+    if usuario is None or usuario.cargo not in CARGOS:
+        raise NaoEncontradoError("Responsável não encontrada.")
     return usuario
 
 
+def _filtro_cargo(cargo: str | None) -> list[Any]:
+    if cargo is None:
+        return []
+    if cargo not in CARGOS:
+        raise RegraInvalidaError("Cargo inválido.")
+    return [Venda.id_usuario.in_(select(Usuario.id_usuario).where(Usuario.cargo == cargo))]
+
+
 def vendas(
-    db: Session, *, inicio: date | None, fim: date | None, id_vendedora: int | None
+    db: Session,
+    *,
+    inicio: date | None,
+    fim: date | None,
+    id_vendedora: int | None,
+    cargo: str | None = None,
 ) -> RelatorioVendas:
     """RF28: quantidade, valor total e comissão por vendedora, num período."""
     inicio, fim = janela(inicio, fim)
     if id_vendedora is not None:
         _vendedora_ou_404(db, id_vendedora)
-    resumos = _agregar(db, inicio, fim, id_vendedora)
+    resumos = _agregar(db, inicio, fim, id_vendedora, cargo)
     return RelatorioVendas(
         periodo=PeriodoRead(inicio=inicio, fim=fim), vendedoras=resumos, totais=_somar(resumos)
     )
@@ -201,12 +227,13 @@ def pedidos_do_periodo(
     status: str | None,
     limit: int,
     offset: int,
+    cargo: str | None = None,
 ) -> tuple[list[Venda], int]:
     """Lista detalhada dos pedidos que compõem o relatório (RF28, critério 2)."""
     inicio, fim = janela(inicio, fim)
     if id_vendedora is not None:
         _vendedora_ou_404(db, id_vendedora)
-    filtros = _filtros_de_pedidos(inicio, fim, id_vendedora, status)
+    filtros = _filtros_de_pedidos(inicio, fim, id_vendedora, status, cargo)
     total = db.scalar(select(func.count()).select_from(Venda).where(*filtros)) or 0
     itens = db.scalars(
         pedido_service.consulta()
@@ -219,9 +246,14 @@ def pedidos_do_periodo(
 
 
 def _filtros_de_pedidos(
-    inicio: date, fim: date, id_vendedora: int | None, status: str | None
+    inicio: date,
+    fim: date,
+    id_vendedora: int | None,
+    status: str | None,
+    cargo: str | None = None,
 ) -> list[Any]:
     filtros = _limites(inicio, fim)
+    filtros.extend(_filtro_cargo(cargo))
     filtros.append(Venda.status == status if status else Venda.status.in_(STATUS_DE_VENDA))
     if id_vendedora is not None:
         filtros.append(Venda.id_usuario == id_vendedora)
@@ -249,14 +281,15 @@ def exportar(
     inicio: date | None,
     fim: date | None,
     id_vendedora: int | None,
+    cargo: str | None = None,
 ) -> tuple[bytes, str, str]:
     """Devolve (conteúdo, tipo MIME, nome do arquivo).
 
     CSV traz os pedidos; XLSX traz o resumo por vendedora e os pedidos.
     """
     inicio, fim = janela(inicio, fim)
-    relatorio = vendas(db, inicio=inicio, fim=fim, id_vendedora=id_vendedora)
-    filtros = _filtros_de_pedidos(inicio, fim, id_vendedora, None)
+    relatorio = vendas(db, inicio=inicio, fim=fim, id_vendedora=id_vendedora, cargo=cargo)
+    filtros = _filtros_de_pedidos(inicio, fim, id_vendedora, None, cargo)
     quantidade = db.scalar(select(func.count()).select_from(Venda).where(*filtros)) or 0
     if quantidade > MAX_LINHAS_EXPORTACAO:
         raise RegraInvalidaError("Período muito grande para exportar: reduza o intervalo.")
@@ -267,7 +300,7 @@ def exportar(
     cabecalho = [
         "Pedido",
         "Data",
-        "Vendedora",
+        "Responsável",
         "Cliente",
         "Situação",
         "Pagamento",
@@ -305,7 +338,7 @@ def exportar(
     resumo.append(["Período", f"{inicio:%d/%m/%Y} a {fim:%d/%m/%Y}"])
     resumo.append([])
     resumo.append(
-        ["Vendedora", "Comissão %", "Pedidos", "Produtos", "Valor total", "A receber", "Pendente"]
+        ["Responsável", "Comissão %", "Pedidos", "Produtos", "Valor total", "A receber", "Pendente"]
     )
     for r in relatorio.vendedoras:
         resumo.append([
@@ -333,3 +366,119 @@ def exportar(
     pasta.save(buffer)
     tipo = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     return buffer.getvalue(), tipo, f"{nome}.xlsx"
+
+
+# --- análise para os gráficos -------------------------------------------------------------------
+
+
+def _dec(valor: object) -> Decimal:
+    return Decimal(str(valor or 0)).quantize(_CENTAVOS, ROUND_HALF_UP)
+
+
+def analise(
+    db: Session,
+    *,
+    inicio: date | None,
+    fim: date | None,
+    id_vendedora: int | None,
+    agrupar: str | None,
+    cargo: str | None = None,
+) -> Analise:
+    """Séries e rankings do período, filtráveis por vendedora (alimenta os gráficos)."""
+    inicio, fim = janela(inicio, fim)
+    if id_vendedora is not None:
+        _vendedora_ou_404(db, id_vendedora)
+    agrupamento: Agrupamento = agrupar or escolher_agrupamento(inicio, fim)  # type: ignore[assignment]
+    filtros = _filtros_de_pedidos(inicio, fim, id_vendedora, None, cargo)
+
+    linhas = db.execute(select(Venda.data_venda, Venda.valor_total).where(*filtros)).all()
+    if len(linhas) > MAX_LINHAS_ANALISE:
+        raise RegraInvalidaError("Período grande demais para analisar: reduza o intervalo.")
+    baldes: dict[date, list[Any]] = {
+        b: [0, Decimal("0.00")] for b in gerar_baldes(inicio, fim, agrupamento)
+    }
+    for momento, valor in linhas:
+        balde = inicio_do_balde(para_local(momento).date(), agrupamento)
+        if balde in baldes:
+            baldes[balde][0] += 1
+            baldes[balde][1] += Decimal(str(valor))
+    serie = [
+        PontoSerie(inicio=b, pedidos=pedidos, faturamento=total.quantize(_CENTAVOS))
+        for b, (pedidos, total) in baldes.items()
+    ]
+
+    status_filtros = _limites(inicio, fim)
+    status_filtros.extend(_filtro_cargo(cargo))
+    if id_vendedora is not None:
+        status_filtros.append(Venda.id_usuario == id_vendedora)
+    por_status = {s: 0 for s in STATUS}
+    for status, qtd in db.execute(
+        select(Venda.status, func.count()).where(*status_filtros).group_by(Venda.status)
+    ):
+        por_status[status] = qtd
+
+    def ranking(consulta: Any, *, com_id: bool) -> list[ItemRanking]:
+        itens = []
+        for linha in db.execute(consulta.limit(TOP)).all():
+            ident, nome, qtd, valor = linha if com_id else (None, *linha)
+            itens.append(
+                ItemRanking(id=ident, nome=str(nome), quantidade=int(qtd or 0), valor=_dec(valor))
+            )
+        return itens
+
+    por_forma = ranking(
+        select(Venda.forma_pagamento, func.count(), func.sum(Venda.valor_total))
+        .where(*filtros)
+        .group_by(Venda.forma_pagamento)
+        .order_by(func.sum(Venda.valor_total).desc()),
+        com_id=False,
+    )
+    top_produtos = ranking(
+        select(
+            Produto.id_produto,
+            Produto.nome,
+            func.sum(ItemVenda.quantidade),
+            func.sum(ItemVenda.subtotal),
+        )
+        .join(ItemVenda, ItemVenda.id_produto == Produto.id_produto)
+        .join(Venda, Venda.id_venda == ItemVenda.id_venda)
+        .where(*filtros)
+        .group_by(Produto.id_produto, Produto.nome)
+        .order_by(func.sum(ItemVenda.quantidade).desc(), Produto.nome),
+        com_id=True,
+    )
+    top_clientes = ranking(
+        select(
+            Cliente.id_cliente,
+            Cliente.nome,
+            func.count(Venda.id_venda),
+            func.sum(Venda.valor_total),
+        )
+        .join(Venda, Venda.id_cliente == Cliente.id_cliente)
+        .where(*filtros)
+        .group_by(Cliente.id_cliente, Cliente.nome)
+        .order_by(func.sum(Venda.valor_total).desc(), Cliente.nome),
+        com_id=True,
+    )
+    por_bairro = ranking(
+        select(Endereco.bairro, func.count(Venda.id_venda), func.sum(Venda.valor_total))
+        .join(Venda, Venda.id_endereco == Endereco.id_endereco)
+        .where(*filtros)
+        .group_by(Endereco.bairro)
+        .order_by(func.sum(Venda.valor_total).desc(), Endereco.bairro),
+        com_id=False,
+    )
+
+    resumos = _agregar(db, inicio, fim, id_vendedora, cargo)
+    return Analise(
+        periodo=PeriodoRead(inicio=inicio, fim=fim),
+        agrupamento=agrupamento,
+        totais=_somar(resumos),
+        serie=serie,
+        pedidos_por_status=por_status,
+        por_forma_pagamento=por_forma,
+        por_vendedora=resumos,
+        top_produtos=top_produtos,
+        top_clientes=top_clientes,
+        por_bairro=por_bairro,
+    )

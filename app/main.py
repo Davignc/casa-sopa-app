@@ -1,15 +1,19 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.errors import registrar_handlers
+from app.core.spa import montar_spa
 from app.routers import (
     auth,
     clientes,
+    enderecos,
     estoque,
+    importacoes,
     pedidos,
     produtos,
     relatorios,
@@ -62,7 +66,7 @@ async def cabecalhos_de_seguranca(
     resposta.headers.setdefault("X-Content-Type-Options", "nosniff")
     resposta.headers.setdefault("X-Frame-Options", "DENY")
     resposta.headers.setdefault("Referrer-Policy", "no-referrer")
-    if not request.url.path.startswith(("/docs", "/redoc", "/openapi.json")):
+    if not request.url.path.startswith(("/docs", "/redoc", "/openapi.json", "/assets/")):
         resposta.headers.setdefault("Cache-Control", "no-store")  # dados internos: não cachear
     return resposta
 
@@ -70,13 +74,19 @@ async def cabecalhos_de_seguranca(
 app.include_router(auth.router)
 app.include_router(usuarios.router)
 app.include_router(clientes.router)
+app.include_router(enderecos.router)
 app.include_router(produtos.router)
 app.include_router(estoque.router)
 app.include_router(pedidos.router)
 app.include_router(relatorios.router)
 app.include_router(sistema.router)
+app.include_router(importacoes.router)
 
 
 @app.get("/health", tags=["infra"])
 def health() -> dict[str, str]:
     return {"status": "ok", "environment": settings.ENVIRONMENT}
+
+
+# Por último: as rotas da API acima têm prioridade sobre os arquivos do front.
+montar_spa(app, Path(__file__).parent / "web")
