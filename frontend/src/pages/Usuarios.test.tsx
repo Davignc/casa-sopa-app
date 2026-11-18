@@ -61,11 +61,14 @@ describe('Usuários: cadastro', () => {
     return { api, dialogo: await screen.findByRole('dialog', { name: '+ Novo usuário' }) }
   }
   async function preencher(d: HTMLElement, v: { nome?: string; email?: string; fone?: string; senha?: string; confirmar?: string } = {}) {
-    await userEvent.type(within(d).getByLabelText('Nome completo *'), v.nome ?? 'Joana Lima')
-    await userEvent.type(within(d).getByLabelText('E-mail *'), v.email ?? 'JOANA@X.org')
-    await userEvent.type(within(d).getByLabelText('Telefone *'), v.fone ?? '16999990009')
-    await userEvent.type(within(d).getByLabelText('Senha *'), v.senha ?? 'senhaForte123')
-    await userEvent.type(within(d).getByLabelText('Confirmar senha'), v.confirmar ?? v.senha ?? 'senhaForte123')
+    for (const [rotulo, valor] of [
+      ['Nome completo *', v.nome ?? 'Joana Lima'], ['E-mail *', v.email ?? 'JOANA@X.org'],
+      ['Telefone *', v.fone ?? '16999990009'], ['Senha *', v.senha ?? 'senhaForte123!'],
+      ['Confirmar senha', v.confirmar ?? v.senha ?? 'senhaForte123!'],
+    ] as const) {
+      await userEvent.click(within(d).getByLabelText(rotulo))
+      await userEvent.paste(valor)
+    }
   }
 
   it('mostra o que falta e não envia', async () => {
@@ -87,6 +90,29 @@ describe('Usuários: cadastro', () => {
     expect(api.de('POST', '/usuarios')).toHaveLength(0)
   })
 
+  it.each(['senhaforte123!', 'SENHAFORTE123!', 'SenhaForte!!!', 'SenhaForte123', 'SenhaForte123 '])('bloqueia cadastro com senha incompleta: %s', async (senha) => {
+    const { api, dialogo } = await abrirNovo()
+    await preencher(dialogo, { senha })
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Cadastrar usuário' }))
+
+    expect(within(dialogo).getByText('Inclua letra maiúscula, minúscula, número e símbolo.')).toBeInTheDocument()
+    expect(api.de('POST', '/usuarios')).toHaveLength(0)
+  })
+
+  it('atualiza os requisitos enquanto digita e associa a lista ao campo', async () => {
+    const { dialogo } = await abrirNovo()
+    const campo = within(dialogo).getByLabelText('Senha *')
+    expect(campo).toHaveAccessibleDescription(/Requisitos da senha/)
+    expect(within(dialogo).getAllByText(/^Pendente:/, { selector: 'span.sr-only' })).toHaveLength(5)
+    await userEvent.type(campo, 'Árvore12_')
+
+    expect(within(dialogo).getByRole('status')).toHaveTextContent('Senha atende aos requisitos.')
+    expect(within(dialogo).queryAllByText(/^Pendente:/, { selector: 'span.sr-only' })).toHaveLength(0)
+    await userEvent.clear(campo)
+    await userEvent.type(campo, 'Aa1!😀😀😀')
+    expect(within(dialogo).getByRole('status')).toHaveTextContent('Senha ainda não atende aos requisitos.')
+  })
+
   it('senha acima de 72 bytes é recusada (limite do bcrypt)', async () => {
     const { dialogo } = await abrirNovo()
     await preencher(dialogo, { senha: 'a'.repeat(73) })
@@ -104,7 +130,7 @@ describe('Usuários: cadastro', () => {
     await userEvent.click(within(dialogo).getByRole('button', { name: 'Cadastrar usuário' }))
 
     await waitFor(() => expect(api.de('POST', '/usuarios')).toHaveLength(1))
-    expect(api.ultima('POST', '/usuarios')?.corpo).toEqual({ nome: 'Joana Lima', email: 'joana@x.org', telefone: '(16) 99999-0009', cargo: 'vendedora', comissao: 7.5, senha: 'senhaForte123' })
+    expect(api.ultima('POST', '/usuarios')?.corpo).toEqual({ nome: 'Joana Lima', email: 'joana@x.org', telefone: '(16) 99999-0009', cargo: 'vendedora', comissao: 7.5, senha: 'senhaForte123!' })
     expect(await screen.findByText('Usuário cadastrado.')).toBeInTheDocument()
   })
 
@@ -166,12 +192,22 @@ describe('Usuários: edição e situação', () => {
     const { api, dialogo } = await abrirEdicao('Maria Vendedora', { 'PATCH /usuarios/2': { body: VENDEDORA } })
     expect(dialogo).toHaveTextContent('encerra as sessões abertas dela')
 
-    await userEvent.type(within(dialogo).getByLabelText('Nova senha'), 'novaSenha12345')
-    await userEvent.type(within(dialogo).getByLabelText('Confirmar senha'), 'novaSenha12345')
+    await userEvent.type(within(dialogo).getByLabelText('Nova senha'), 'novaSenha12345!')
+    await userEvent.type(within(dialogo).getByLabelText('Confirmar senha'), 'novaSenha12345!')
     await userEvent.click(within(dialogo).getByRole('button', { name: 'Salvar' }))
 
     await waitFor(() => expect(api.de('PATCH', '/usuarios/2')).toHaveLength(1))
-    expect(api.ultima('PATCH', '/usuarios/2')?.corpo).toEqual({ senha: 'novaSenha12345' })
+    expect(api.ultima('PATCH', '/usuarios/2')?.corpo).toEqual({ senha: 'novaSenha12345!' })
+  })
+
+  it('recusa troca por senha fraca', async () => {
+    const { api, dialogo } = await abrirEdicao('Maria Vendedora')
+    await userEvent.type(within(dialogo).getByLabelText('Nova senha'), 'SenhaSemSimbolo123')
+    await userEvent.type(within(dialogo).getByLabelText('Confirmar senha'), 'SenhaSemSimbolo123')
+    await userEvent.click(within(dialogo).getByRole('button', { name: 'Salvar' }))
+
+    expect(within(dialogo).getByText('Inclua letra maiúscula, minúscula, número e símbolo.')).toBeInTheDocument()
+    expect(api.de('PATCH', '/usuarios/2')).toHaveLength(0)
   })
 
   it('sem mudanças, não chama o servidor', async () => {

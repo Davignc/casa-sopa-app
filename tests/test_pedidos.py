@@ -101,14 +101,14 @@ def test_outra_vendedora_nao_altera_pedido_nem_estoque(
             email="outra@example.org",
             telefone="16977776666",
             cargo="vendedora",
-            senha="senhaForte123",
+            senha="senhaForte123!",
         ),
     )
     token = client.post(
         "/auth/login/json",
         json={
             "email": "outra@example.org",
-            "senha": "senhaForte123",
+            "senha": "senhaForte123!",
         },
     ).json()["access_token"]
     outra = {"Authorization": f"Bearer {token}"}

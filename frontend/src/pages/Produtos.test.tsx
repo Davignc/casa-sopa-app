@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { pagina, produto, PROD_A } from '../test/dados'
@@ -73,6 +73,23 @@ describe('Produtos: lista e alertas', () => {
     expect(within(inativo).queryByRole('button', { name: /Registrar entrada/ })).not.toBeInTheDocument()
 
     await userEvent.click(within(inativo).getByRole('button', { name: 'Reativar Cesto' }))
+    await waitFor(() => expect(api.de('POST', '/produtos/4/reativar')).toHaveLength(1))
+  })
+
+  it('preserva o foco e o clique de reativação enquanto a busca atualiza', async () => {
+    const api = await abrir(ADMIN, { 'POST /produtos/4/reativar': { body: { ...INATIVO, is_ativo: true } } })
+    const usuario = userEvent.setup()
+    await usuario.click(screen.getByLabelText('Mostrar inativos'))
+    const botao = await screen.findByRole('button', { name: 'Reativar Cesto' })
+
+    await usuario.pointer({ target: botao, keys: '[MouseLeft>]' })
+    // A busca pode atualizar entre pressionar e soltar o botão do mouse.
+    fireEvent.change(screen.getByLabelText('Buscar produtos'), { target: { value: 'cesto' } })
+    await waitFor(() => expect(api.ultima('GET', '/produtos')?.query.get('busca')).toBe('cesto'))
+
+    expect(screen.getByRole('button', { name: 'Reativar Cesto' })).toBe(botao)
+    expect(botao).toHaveFocus()
+    await usuario.pointer({ keys: '[/MouseLeft]' })
     await waitFor(() => expect(api.de('POST', '/produtos/4/reativar')).toHaveLength(1))
   })
 })

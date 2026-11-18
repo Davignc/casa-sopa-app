@@ -130,7 +130,7 @@ def vendedoras(client, db):
     saida = {}
     for i, (chave, nome, com) in enumerate([("maria", "Maria", "10"), ("joana", "Joana", "5")]):
         dados = {"nome": nome, "email": f"{chave}@x.org", "telefone": f"1698000000{i}", "cargo": "vendedora",
-                 "comissao": com, "senha": "senhaForte123"}  # fmt: skip
+                 "comissao": com, "senha": "senhaForte123!"}  # fmt: skip
         u = usuario_service.criar_usuario(db, UsuarioCreate(**dados))
         token = client.post(
             "/auth/login/json", json={"email": dados["email"], "senha": dados["senha"]}

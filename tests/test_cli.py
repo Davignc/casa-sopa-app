@@ -13,21 +13,21 @@ def _sessao_de_teste(monkeypatch, db):
 
 
 def test_criar_admin_cria_administradora_com_senha_em_hash(db):
-    id_usuario = cli.criar_admin("Ana", "ana@casadasopa.org", "(16) 98888-7777", "senhaForte123")
+    id_usuario = cli.criar_admin("Ana", "ana@casadasopa.org", "(16) 98888-7777", "senhaForte123!")
 
     usuario = db.get(Usuario, id_usuario)
     assert usuario.cargo == "administradora"
     assert usuario.is_ativo is True
     assert usuario.telefone == "16988887777"
-    assert usuario.senha != "senhaForte123"
-    assert verificar_senha("senhaForte123", usuario.senha)
+    assert usuario.senha != "senhaForte123!"
+    assert verificar_senha("senhaForte123!", usuario.senha)
 
 
 def test_criar_admin_duplicada_falha_sem_stacktrace(db):
-    cli.criar_admin("Ana", "ana@casadasopa.org", "16988887777", "senhaForte123")
+    cli.criar_admin("Ana", "ana@casadasopa.org", "16988887777", "senhaForte123!")
 
     with pytest.raises(SystemExit) as erro:
-        cli.criar_admin("Outra", "ana@casadasopa.org", "16977776666", "senhaForte123")
+        cli.criar_admin("Outra", "ana@casadasopa.org", "16977776666", "senhaForte123!")
 
     assert "e-mail" in str(erro.value)
     assert len(db.scalars(select(Usuario)).all()) == 1
@@ -36,9 +36,10 @@ def test_criar_admin_duplicada_falha_sem_stacktrace(db):
 @pytest.mark.parametrize(
     ("email", "telefone", "senha"),
     [
-        ("invalido", "16988887777", "senhaForte123"),
-        ("ana@casadasopa.org", "123", "senhaForte123"),
+        ("invalido", "16988887777", "senhaForte123!"),
+        ("ana@casadasopa.org", "123", "senhaForte123!"),
         ("ana@casadasopa.org", "16988887777", "curta"),
+        ("ana@casadasopa.org", "16988887777", "senhaSemSimbolo123"),
     ],
 )
 def test_criar_admin_com_dados_invalidos_falha(email, telefone, senha):
@@ -49,7 +50,7 @@ def test_criar_admin_com_dados_invalidos_falha(email, telefone, senha):
 
 
 def test_main_le_a_senha_da_variavel_de_ambiente(monkeypatch, db, capsys):
-    monkeypatch.setenv("CASA_SOPA_ADMIN_SENHA", "senhaForte123")
+    monkeypatch.setenv("CASA_SOPA_ADMIN_SENHA", "senhaForte123!")
 
     codigo = cli.main(
         [

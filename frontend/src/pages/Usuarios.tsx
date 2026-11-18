@@ -5,13 +5,14 @@ import { Alerta, Botao, Campo, Carregando, Chip, Confirmar, ErroConsulta, Modal,
 import { api, mensagemDeErro } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { Privacidade } from '../components/Privacidade'
+import { RequisitosSenha } from '../components/RequisitosSenha'
+import { erroSenha } from '../lib/senha'
 import { emailValido, mascaraTelefone, telefone, telefoneValido } from '../lib/format'
 import { useDebounce } from '../lib/hooks'
 import { focarErros } from '../lib/acessibilidade'
 import type { Cargo, Pagina, Usuario } from '../lib/types'
 
 const POR_PAGINA = 20
-const bytes = (t: string) => new TextEncoder().encode(t).length
 
 function FormUsuario({ usuario, ehEu, onFechar }: { usuario: Usuario | null; ehEu: boolean; onFechar: () => void }) {
   const avisos = useAvisos()
@@ -30,7 +31,7 @@ function FormUsuario({ usuario, ehEu, onFechar }: { usuario: Usuario | null; ehE
     email: emailValido(f.email) ? null : 'Informe um e-mail válido.',
     telefone: telefoneValido(f.telefone) ? null : 'Informe DDD + número.',
     comissao: f.cargo !== 'vendedora' || comissao === null || (Number.isFinite(comissao) && comissao >= 0 && comissao <= 100) ? null : 'Use um valor de 0 a 100.',
-    senha: !f.senha && editando ? null : f.senha.length < 8 ? 'Mínimo de 8 caracteres.' : bytes(f.senha) > 72 ? 'Senha longa demais (máx. 72 bytes).' : null,
+    senha: !f.senha && editando ? null : erroSenha(f.senha),
     confirmar: f.senha !== f.confirmar ? 'As senhas não conferem.' : null,
   }
   const ver = (k: keyof typeof erros) => (tentou ? erros[k] : null)
@@ -82,8 +83,11 @@ function FormUsuario({ usuario, ehEu, onFechar }: { usuario: Usuario | null; ehE
           {f.cargo === 'vendedora' && <Campo rotulo="Comissão (%)" erro={ver('comissao')} dica="Opcional. De 0 a 100.">{(p) => <input {...p} className={cn('campo', ver('comissao') && 'campo-erro')} inputMode="decimal" placeholder="Ex.: 10" value={f.comissao} onChange={(e) => setF({ ...f, comissao: e.target.value })} />}</Campo>}
         </div>
         <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
-          <Campo rotulo={editando ? 'Nova senha' : 'Senha'} obrigatorio={!editando} erro={ver('senha')} dica={editando ? 'Deixe em branco para manter. Trocar a senha encerra as sessões abertas dela.' : 'Mínimo de 8 caracteres.'}>
-            {(p) => <input {...p} className={cn('campo', ver('senha') && 'campo-erro')} type="password" autoComplete="new-password" value={f.senha} onChange={(e) => setF({ ...f, senha: e.target.value })} />}
+          <Campo rotulo={editando ? 'Nova senha' : 'Senha'} obrigatorio={!editando} erro={ver('senha')} dica={editando ? 'Deixe em branco para manter. Trocar a senha encerra as sessões abertas dela.' : undefined}>
+            {(p) => <>
+              <input {...p} aria-describedby={[p['aria-describedby'], (!editando || f.senha) && `${p.id}-requisitos`].filter(Boolean).join(' ') || undefined} className={cn('campo', ver('senha') && 'campo-erro')} type="password" autoComplete="new-password" value={f.senha} onChange={(e) => setF({ ...f, senha: e.target.value })} />
+              {(!editando || f.senha) && <RequisitosSenha senha={f.senha} id={`${p.id}-requisitos`} />}
+            </>}
           </Campo>
           <Campo rotulo="Confirmar senha" erro={ver('confirmar')}>{(p) => <input {...p} className={cn('campo', ver('confirmar') && 'campo-erro')} type="password" autoComplete="new-password" value={f.confirmar} onChange={(e) => setF({ ...f, confirmar: e.target.value })} />}</Campo>
         </div>

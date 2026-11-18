@@ -8,6 +8,7 @@ detalhes internos (stack trace, SQL) para o cliente.
 import logging
 
 from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
@@ -71,6 +72,15 @@ class AcessoNegadoError(ErroDeNegocio):
 
 
 def registrar_handlers(app: FastAPI) -> None:
+    @app.exception_handler(RequestValidationError)
+    async def _validacao(_: Request, exc: RequestValidationError) -> JSONResponse:
+        # A resposta padrão inclui o valor recebido, inclusive senhas. Devolve
+        # somente localização, tipo e mensagem, sem repetir dados do formulário.
+        erros = [{chave: erro[chave] for chave in ("type", "loc", "msg")} for erro in exc.errors()]
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, content={"detail": erros}
+        )
+
     @app.exception_handler(ErroDeNegocio)
     async def _erro_de_negocio(_: Request, exc: ErroDeNegocio) -> JSONResponse:
         return JSONResponse(

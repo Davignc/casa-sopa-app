@@ -149,6 +149,11 @@ Pontos que os documentos não detalham e que ficaram definidos assim (mudam em u
 
 ## Segurança
 
+- **Senhas novas:** mínimo de 8 caracteres, com letra maiúscula, minúscula, número e símbolo;
+  máximo de 72 bytes (limite do bcrypt). Cadastro, troca de senha e criação de administradora
+  pelo terminal aplicam a mesma regra. A tela mostra os requisitos durante a digitação.
+  Senhas existentes continuam válidas no login. Os caracteres da senha, inclusive espaços,
+  são preservados; espaços não contam como símbolo.
 - **Login:** após `LOGIN_MAX_TENTATIVAS` erros (5) a resposta vira `429` por `LOGIN_BLOQUEIO_MINUTOS`
   (15), por par IP+e-mail e por IP; mensagem e tempo iguais para e-mail inexistente (sem enumerar contas).
 - **Sessão:** JWT (HS256) com id único; o logout o revoga; trocar a senha de um usuário derruba as

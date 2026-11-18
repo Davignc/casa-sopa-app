@@ -105,7 +105,7 @@ def dados_usuario() -> dict[str, str]:
         "telefone": "16999998888",
         "cargo": "vendedora",
         "comissao": "5.00",
-        "senha": "senhaForte123",
+        "senha": "senhaForte123!",
     }
 
 
@@ -116,7 +116,7 @@ def dados_admin() -> dict[str, str]:
         "email": "ana@casadasopa.org",
         "telefone": "16988887777",
         "cargo": "administradora",
-        "senha": "adminForte123",
+        "senha": "adminForte123!",
     }
 
 

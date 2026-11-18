@@ -4,6 +4,7 @@ import hashlib
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from unicodedata import category
 
 import bcrypt
 import jwt
@@ -13,6 +14,25 @@ from app.core.config import settings
 # bcrypt só olha os 72 primeiros bytes. Recusamos acima disso para que duas senhas
 # diferentes nunca gerem o mesmo hash.
 SENHA_MAX_BYTES = 72
+SENHA_MIN_CARACTERES = 8
+
+
+def validar_senha_forte(senha: str) -> str:
+    """Valida senhas novas sem modificar os caracteres informados."""
+    if len(senha.encode("utf-8")) > SENHA_MAX_BYTES:
+        raise ValueError(f"A senha não pode passar de {SENHA_MAX_BYTES} bytes.")
+    categorias = {category(caractere) for caractere in senha}
+    if (
+        len(senha) < SENHA_MIN_CARACTERES
+        or not {"Lu", "Ll", "Nd"}.issubset(categorias)
+        or not any(categoria[0] in {"P", "S"} for categoria in categorias)
+    ):
+        raise ValueError(
+            "A senha deve ter no mínimo 8 caracteres, letra maiúscula, "
+            "letra minúscula, número e símbolo."
+        )
+    return senha
+
 
 # Tolerância (segundos) para pequenas diferenças de relógio ao validar "iat".
 _TOLERANCIA_RELOGIO = 10

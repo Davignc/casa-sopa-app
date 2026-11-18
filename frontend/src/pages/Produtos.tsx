@@ -138,6 +138,10 @@ export function FormMovimento({ tipo, produto, onFechar }: { tipo: 'entrada' | '
 
 /* ---------- Lista ---------- */
 
+const Icone = ({ rotulo, onClick, children, cor = 'text-slate-500 hover:bg-slate-100' }: { rotulo: string; onClick: () => void; children: React.ReactNode; cor?: string }) => (
+  <button type="button" aria-label={rotulo} title={rotulo} onClick={(e) => { e.stopPropagation(); onClick() }} className={cn('rounded-lg p-2', cor)}>{children}</button>
+)
+
 export default function Produtos() {
   const { ehAdmin } = useAuth()
   const avisos = useAvisos()
@@ -163,10 +167,6 @@ export default function Produtos() {
     onSuccess: (_, p) => { invalidar(p.id_produto); avisos.sucesso(p.is_ativo ? 'Produto inativado.' : 'Produto reativado.'); setTrocar(null) },
     onError: avisos.erro,
   })
-
-  const Icone = ({ rotulo, onClick, children, cor = 'text-slate-500 hover:bg-slate-100' }: { rotulo: string; onClick: () => void; children: React.ReactNode; cor?: string }) => (
-    <button type="button" aria-label={rotulo} title={rotulo} onClick={(e) => { e.stopPropagation(); onClick() }} className={cn('rounded-lg p-2', cor)}>{children}</button>
-  )
 
   return (
     <Pagina_ titulo="Produtos e estoque" acoes={<Botao icone={<Plus className="h-4 w-4" />} onClick={() => setEditar('novo')}>Novo produto</Botao>}>

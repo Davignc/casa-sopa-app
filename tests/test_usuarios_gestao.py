@@ -24,7 +24,7 @@ def novo_usuario(db):
             "telefone": f"1697{n:07d}",
             "cargo": "vendedora",
             "comissao": "5.00",
-            "senha": "senhaForte123",
+            "senha": "senhaForte123!",
         }
         dados.update(kw)
         return usuario_service.criar_usuario(db, UsuarioCreate(**dados))
@@ -352,40 +352,40 @@ def test_edicao_invalida_nao_altera_nada(client, db, headers_admin, novo_usuario
 
 
 def test_nova_senha_vale_e_a_antiga_nao(client, headers_admin, novo_usuario):
-    u = novo_usuario(senha="senhaAntiga123")
+    u = novo_usuario(senha="senhaAntiga123!")
 
-    assert _patch(client, headers_admin, u.id_usuario, senha="senhaNova12345").status_code == 200
+    assert _patch(client, headers_admin, u.id_usuario, senha="senhaNova12345!").status_code == 200
 
-    assert _login(client, u.email, "senhaAntiga123").status_code == 401
-    assert _login(client, u.email, "senhaNova12345").status_code == 200
+    assert _login(client, u.email, "senhaAntiga123!").status_code == 401
+    assert _login(client, u.email, "senhaNova12345!").status_code == 200
 
 
 def test_resposta_da_edicao_nao_expoe_senha(client, headers_admin, novo_usuario):
     u = novo_usuario()
 
-    resposta = _patch(client, headers_admin, u.id_usuario, senha="senhaNova12345")
+    resposta = _patch(client, headers_admin, u.id_usuario, senha="senhaNova12345!")
 
     assert "senha" not in resposta.json()
-    assert "senhaNova12345" not in resposta.text
+    assert "senhaNova12345!" not in resposta.text
 
 
 def test_senha_nova_e_gravada_como_hash(client, db, headers_admin, novo_usuario):
     u = novo_usuario()
 
-    _patch(client, headers_admin, u.id_usuario, senha="senhaNova12345")
+    _patch(client, headers_admin, u.id_usuario, senha="senhaNova12345!")
     db.refresh(u)
 
     assert u.senha.startswith("$2b$")
-    assert "senhaNova12345" not in u.senha
+    assert "senhaNova12345!" not in u.senha
 
 
 def test_trocar_a_senha_derruba_as_sessoes_abertas_do_usuario(client, headers_admin, novo_usuario):
-    u = novo_usuario(senha="senhaAntiga123")
-    token_antigo = _login(client, u.email, "senhaAntiga123").json()["access_token"]
+    u = novo_usuario(senha="senhaAntiga123!")
+    token_antigo = _login(client, u.email, "senhaAntiga123!").json()["access_token"]
     cabecalho = {"Authorization": f"Bearer {token_antigo}"}
     assert client.get("/usuarios/me", headers=cabecalho).status_code == 200
 
-    _patch(client, headers_admin, u.id_usuario, senha="senhaNova12345")
+    _patch(client, headers_admin, u.id_usuario, senha="senhaNova12345!")
 
     resposta = client.get("/usuarios/me", headers=cabecalho)
     assert resposta.status_code == 401
@@ -393,8 +393,8 @@ def test_trocar_a_senha_derruba_as_sessoes_abertas_do_usuario(client, headers_ad
 
 
 def test_trocar_dados_sem_trocar_a_senha_mantem_a_sessao(client, headers_admin, novo_usuario):
-    u = novo_usuario(senha="senhaAntiga123")
-    token = _login(client, u.email, "senhaAntiga123").json()["access_token"]
+    u = novo_usuario(senha="senhaAntiga123!")
+    token = _login(client, u.email, "senhaAntiga123!").json()["access_token"]
 
     _patch(client, headers_admin, u.id_usuario, nome="Outro Nome")
 
@@ -417,15 +417,15 @@ def test_inativar_retorna_204_e_preserva_o_registro(client, db, headers_admin, n
 
 
 def test_usuario_inativado_nao_consegue_logar(client, headers_admin, novo_usuario):
-    u = novo_usuario(senha="senhaForte123")
+    u = novo_usuario(senha="senhaForte123!")
     client.delete(f"/usuarios/{u.id_usuario}", headers=headers_admin)
 
-    assert _login(client, u.email, "senhaForte123").status_code == 401
+    assert _login(client, u.email, "senhaForte123!").status_code == 401
 
 
 def test_sessao_aberta_de_usuario_inativado_para_de_funcionar(client, headers_admin, novo_usuario):
-    u = novo_usuario(senha="senhaForte123")
-    token = _login(client, u.email, "senhaForte123").json()["access_token"]
+    u = novo_usuario(senha="senhaForte123!")
+    token = _login(client, u.email, "senhaForte123!").json()["access_token"]
 
     client.delete(f"/usuarios/{u.id_usuario}", headers=headers_admin)
 
@@ -473,14 +473,14 @@ def test_email_de_inativo_continua_reservado(client, headers_admin, novo_usuario
 
 
 def test_reativar_devolve_o_acesso(client, headers_admin, novo_usuario):
-    u = novo_usuario(senha="senhaForte123")
+    u = novo_usuario(senha="senhaForte123!")
     client.delete(f"/usuarios/{u.id_usuario}", headers=headers_admin)
 
     resposta = client.post(f"/usuarios/{u.id_usuario}/reativar", headers=headers_admin)
 
     assert resposta.status_code == 200
     assert resposta.json()["is_ativo"] is True
-    assert _login(client, u.email, "senhaForte123").status_code == 200
+    assert _login(client, u.email, "senhaForte123!").status_code == 200
 
 
 def test_reativar_inexistente_retorna_404(client, headers_admin):

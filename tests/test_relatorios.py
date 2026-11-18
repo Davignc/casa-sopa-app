@@ -69,7 +69,7 @@ def vendedoras(client, db):
             "telefone": f"1698{len(out):07d}",
             "cargo": "vendedora",
             "comissao": comissao,
-            "senha": "senhaForte123",
+            "senha": "senhaForte123!",
         }
         usuario = usuario_service.criar_usuario(db, UsuarioCreate(**dados))
         token = client.post(

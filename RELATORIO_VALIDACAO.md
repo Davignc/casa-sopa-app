@@ -139,3 +139,65 @@ Após essa remoção, passaram 75 testes selecionados do backend (permissões,
 contrato, API e relatórios) e os 270 testes da interface. A compilação de produção
 foi atualizada. Evidências em `artifacts/validacao/backend-versao-2.txt`,
 `frontend-versao-2.txt` e `build-versao-2.txt`.
+
+## Senhas fortes — 17/11/2026
+
+- Cadastro e troca de senha exigem pelo menos 8 caracteres, letra maiúscula,
+  letra minúscula, número e símbolo, com limite de 72 bytes para o bcrypt.
+  A criação da primeira administradora pelo terminal usa a mesma validação.
+- O formulário exibe uma lista de requisitos que se atualiza durante a digitação,
+  associada ao campo para tecnologias assistivas. Espaços não contam como símbolo.
+- Os caracteres da senha são preservados, inclusive espaços nas extremidades.
+  O login continua aceitando senhas antigas. Editar outros dados sem informar
+  uma nova senha mantém a credencial existente.
+- Erros de validação da API retornam tipo, localização e mensagem, sem repetir os
+  valores enviados nem o contexto que poderia incluir senhas ou o formulário inteiro.
+- Os testes abrangem requisitos ausentes, confirmação, cadastro, troca, CLI,
+  compatibilidade com senhas antigas, Unicode e limites em caracteres/bytes.
+- Validação do backend: **814 testes aprovados**, usando `TEST_DATABASE_URL=sqlite://`
+  e uma pasta `--basetemp` exclusiva dentro de `.pytest_cache`, pois a pasta
+  temporária padrão do Windows não estava acessível neste ambiente.
+- Tela de usuários: **23 testes aprovados** na execução final, com preenchimento
+  por colagem nos cenários de formulário e digitação no teste dos requisitos ao vivo.
+- Compilação de produção e TypeScript aprovados; saída atualizada em `app/web`.
+  `mypy app/` aprovado (59 arquivos) e Ruff aprovado nos arquivos Python alterados.
+- A execução completa do frontend terminou com **273/277 testes aprovados**.
+  Os dois casos de usuários dessa execução foram resolvidos pelo ajuste do
+  preenchimento de teste e passaram na suíte final de 23 testes. As falhas
+  restantes envolveram seleção de cliente/endereço em pedidos e reativação de
+  produto após filtros. Uma execução separada desses dois arquivos terminou
+  com **45/47 aprovados**, com falhas nesses fluxos de interação; os fontes
+  dessas funcionalidades e seus testes não foram alterados nesta tarefa.
+  Na conferência pontual final, os dois cenários de pedidos passaram e o caso de
+  reativação de produto continuou falhando, inclusive com uma repetição automática.
+  A suíte geral do frontend, portanto, não está integralmente aprovada.
+
+## Retomada da validação — 18/11/2026
+
+- A execução inicial completa do frontend passou: **277 testes em 19 arquivos**.
+  As falhas anteriores de pedidos não se reproduziram nesta execução.
+- Foi identificado e reproduzido um problema de interação na tela de produtos:
+  o componente dos botões de ação era declarado dentro da página e recriado a
+  cada renderização. Atualizações da busca podiam substituir o botão durante
+  um clique, removendo seu foco e impedindo a reativação.
+- O componente foi movido para o escopo do módulo para preservar os botões
+  durante as atualizações. Um teste de regressão pressiona o botão, aguarda uma
+  atualização da busca e só então solta o mouse, verificando a preservação do
+  elemento, do foco e o envio de uma única requisição de reativação.
+  O teste falhou antes da correção, confirmando a substituição do elemento.
+- Após a correção, a suíte completa do frontend passou: **278 testes em 19
+  arquivos**, incluindo a regressão de produtos e os fluxos de pedidos.
+  A pendência de aprovação da suíte registrada em 17/11 está encerrada nesta
+  execução. Permanecem os avisos já descritos do ambiente de testes.
+- Backend: **814 testes aprovados**, com `TEST_DATABASE_URL=sqlite://` e
+  `--basetemp=.pytest_cache/retomada-2026-11-18`.
+- `mypy app/`: **59 arquivos sem problemas**. Ruff aprovado nos dez arquivos
+  Python alterados/novos. A compilação de produção, que inclui a verificação
+  TypeScript, passou e atualizou `app/web`.
+- `git diff --check`: aprovado.
+
+Evidências desta retomada em `artifacts/validacao/`: `backend-retomada-2026-11-18.txt`,
+`frontend-retomada-2026-11-18.txt`, `produtos-regressao-antes-2026-11-18.txt`,
+`frontend-final-2026-11-18.txt` e `build-retomada-2026-11-18.txt`.
+Os limites anteriores de validação com PostgreSQL e navegador real continuam
+aplicáveis; esta retomada executou testes automatizados e compilação local.
