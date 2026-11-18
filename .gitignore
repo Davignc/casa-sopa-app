@@ -262,11 +262,7 @@ frontend/node_modules/
 frontend/dist/
 *.tsbuildinfo
 
-# Intermediários da produção do vídeo (os arquivos finais ficam em artifacts/video).
-artifacts/video/producao-*/
-artifacts/video/narracao/
 artifacts/validacao/pytest-novas-funcionalidades/
 
 # Caches locais gerados pelas ferramentas do Windows.
 /Microsoft/Windows/PowerShell/ModuleAnalysisCache
-/Python/Python312/comtypes_cache/

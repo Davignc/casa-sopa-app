@@ -2,7 +2,7 @@ from functools import lru_cache
 from typing import Literal, Self
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import Field, HttpUrl, SecretStr, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SECRET_KEY_TAMANHO_MINIMO = 32
@@ -27,13 +27,6 @@ class Settings(BaseSettings):
     # Bloqueio de login (RF01, critério 4): após N falhas, o cliente espera M minutos.
     LOGIN_MAX_TENTATIVAS: int = Field(default=5, ge=1)
     LOGIN_BLOQUEIO_MINUTOS: int = Field(default=15, ge=1)
-
-    FRONTEND_URL: HttpUrl = HttpUrl("http://localhost:8000")
-    SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: Literal[465, 587] = 587
-    SMTP_USER: str = ""
-    SMTP_PASSWORD: SecretStr = SecretStr("")
-    RESET_PASSWORD_EXPIRE_MINUTES: int = Field(default=30, ge=5, le=60)
 
     # Custo do bcrypt. 12 é o padrão seguro; só baixe (mín. 4) em testes.
     BCRYPT_ROUNDS: int = Field(default=12, ge=4, le=16)
@@ -83,14 +76,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _custo_bcrypt_minimo_em_producao(self) -> Self:
-        if self.FRONTEND_URL.query or self.FRONTEND_URL.fragment or self.FRONTEND_URL.username:
-            raise ValueError("FRONTEND_URL não pode conter credenciais, query ou fragmento.")
-        if (
-            self.ENVIRONMENT == "production"
-            and self.SMTP_USER
-            and self.FRONTEND_URL.scheme != "https"
-        ):
-            raise ValueError("FRONTEND_URL precisa usar HTTPS em produção.")
         if self.ENVIRONMENT == "production" and self.BCRYPT_ROUNDS < 10:
             raise ValueError("BCRYPT_ROUNDS precisa ser ao menos 10 em produção.")
         return self

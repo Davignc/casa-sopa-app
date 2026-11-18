@@ -16,9 +16,9 @@ describe('Layout e menu', () => {
     await renderizar(<Layout />, { usuario: ADMIN })
 
     const menu = screen.getByRole('navigation', { name: 'Principal' })
-    for (const nome of ['Início', 'Clientes', 'Pedidos', 'Produtos', 'Relatórios', 'Importar dados', 'Usuários', 'Configurações'])
+    for (const nome of ['Início', 'Clientes', 'Pedidos', 'Produtos', 'Relatórios', 'Usuários', 'Configurações'])
       expect(menu).toHaveTextContent(nome)
-    expect(screen.getAllByText('Admin')).toHaveLength(4)
+    expect(screen.getAllByText('Admin')).toHaveLength(3)
     expect(screen.getAllByText('Administradora').length).toBeGreaterThan(0)
   })
 
@@ -28,7 +28,7 @@ describe('Layout e menu', () => {
 
     const menu = screen.getByRole('navigation', { name: 'Principal' })
     for (const nome of ['Início', 'Clientes', 'Pedidos', 'Produtos']) expect(menu).toHaveTextContent(nome)
-    for (const nome of ['Relatórios', 'Importar dados', 'Usuários', 'Configurações']) expect(menu).not.toHaveTextContent(nome)
+    for (const nome of ['Relatórios', 'Usuários', 'Configurações']) expect(menu).not.toHaveTextContent(nome)
     expect(screen.queryByText('Admin')).not.toBeInTheDocument()
     await waitFor(() => expect(api.de('GET', '/estoque/alertas')).toHaveLength(1))
     expect(api.de('GET', '/sistema/backup')).toHaveLength(0)

@@ -49,12 +49,6 @@ tamanho de `VARCHAR` nem guarda fuso; a entrega deve usar PostgreSQL e a suíte 
 
 ## Front-end
 
-**Novas funções:** recuperação de senha por e-mail via Gmail e importação de
-planilhas de clientes, produtos e vendas antigas, com prévia e confirmação pela
-administradora. Veja a configuração, os modelos e o vídeo em
-[Recuperação, importação e vídeo](docs/RECUPERACAO_IMPORTACAO_VIDEO.md).
-Depois de atualizar, aplique `uv run alembic upgrade head`.
-
 O sistema já vem **compilado** em `app/web` e é servido pelo próprio backend: depois de `uv run fastapi dev app/main.py`,
 abra <http://localhost:8000>. **Não precisa de Node.js** para usar. Página e API ficam na mesma origem (sem CORS).
 

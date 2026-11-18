@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { BarChart3, Boxes, ClipboardList, Home, LogOut, Menu, Settings, Users, UserCog, X, FileUp } from 'lucide-react'
+import { BarChart3, Boxes, ClipboardList, Home, LogOut, Menu, Settings, Users, UserCog, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useDialogo } from '../lib/acessibilidade'
@@ -57,7 +57,6 @@ export function Layout() {
     ...(ehAdmin
       ? [
           { para: '/relatorios', rotulo: 'Relatórios', icone: <BarChart3 className="h-5 w-5" />, admin: true },
-          { para: '/importacoes', rotulo: 'Importar dados', icone: <FileUp className="h-5 w-5" />, admin: true },
           { para: '/usuarios', rotulo: 'Usuários', icone: <UserCog className="h-5 w-5" />, admin: true },
           { para: '/configuracoes', rotulo: 'Configurações', icone: <Settings className="h-5 w-5" />, admin: true },
         ]

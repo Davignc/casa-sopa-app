@@ -127,17 +127,15 @@ O trabalho permanece no diretório local, incluindo os fontes novos e o frontend
 compilado. Os arquivos que já estavam modificados ou sem rastreamento antes desta
 tarefa continuam preservados.
 
-## Adendo — recuperação de senha, importação e vídeo (17/11/2026)
+## Versão 2
 
-Implementadas a recuperação de senha por e-mail via Gmail e a importação de clientes,
-produtos e vendas antigas, com modelos Excel, análise e confirmação pela administradora.
-Criado vídeo de 5min31s com telas reais, dados fictícios, narração em português e legendas.
+O login orienta o contato com a administradora para redefinir senhas.
+A importação de planilhas foi removida da interface e da API.
+A exportação de relatórios em Excel/CSV foi mantida.
+A tabela histórica de controle de importações e sua migração foram preservadas
+para manter compatibilidade com bancos existentes, sem apagar registros.
 
-Nesta entrega, o PostgreSQL local respondeu e a migração aditiva `0002` foi aplicada;
-a pendência de conectividade descrita na validação anterior não se repetiu. A suíte
-atual passou com **812 testes do backend em PostgreSQL e 276 do frontend**. O envio
-real pelo Gmail depende das credenciais e da URL pública no `.env`; não foi realizado.
-
-Detalhes e evidências em [entrega de 17/11/2026](artifacts/validacao/entrega-17-11-2026.md).
-Configuração em [recuperação, importação e vídeo](docs/RECUPERACAO_IMPORTACAO_VIDEO.md).
-Vídeo em [casa-da-sopa-guia.mp4](artifacts/video/casa-da-sopa-guia.mp4).
+Após essa remoção, passaram 75 testes selecionados do backend (permissões,
+contrato, API e relatórios) e os 270 testes da interface. A compilação de produção
+foi atualizada. Evidências em `artifacts/validacao/backend-versao-2.txt`,
+`frontend-versao-2.txt` e `build-versao-2.txt`.

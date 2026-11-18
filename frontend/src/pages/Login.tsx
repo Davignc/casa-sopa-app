@@ -8,7 +8,6 @@ import { ApiError, mensagemDeErro } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { emailValido } from '../lib/format'
 import { focarErros } from '../lib/acessibilidade'
-import Recuperacao from './Recuperacao'
 
 export default function Login() {
   const { entrar, aviso } = useAuth()
@@ -18,7 +17,6 @@ export default function Login() {
   const [erros, setErros] = useState<{ email?: string; senha?: string }>({})
   const [falha, setFalha] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
-  const [recuperar, setRecuperar] = useState(false)
 
   async function enviar(e: FormEvent) {
     e.preventDefault()
@@ -40,7 +38,6 @@ export default function Login() {
     }
   }
 
-  if (recuperar) return <Recuperacao onVoltar={() => setRecuperar(false)} />
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="hidden flex-col items-center justify-center gap-6 bg-gradient-to-br from-brand-900 to-brand-950 p-12 text-center lg:flex">
@@ -77,7 +74,7 @@ export default function Login() {
           </Campo>
           <Botao type="submit" carregando={enviando} icone={<LogIn className="h-4 w-4" />} className="w-full">Entrar</Botao>
           <Privacidade contexto="login" />
-          <button type="button" onClick={() => setRecuperar(true)} className="block w-full text-center text-sm font-semibold text-brand-700 underline">Esqueci minha senha</button>
+          <p className="text-center text-xs text-slate-400">Esqueceu a senha? Entre em contato com a administradora para redefinir.</p>
         </form>
       </div>
     </div>

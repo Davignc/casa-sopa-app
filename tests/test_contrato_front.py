@@ -95,7 +95,6 @@ def test_o_front_nao_chama_rotas_fora_do_prefixo_conhecido():
         "estoque",
         "pedidos",
         "relatorios",
-        "importacoes",
         "sistema",
     }
 

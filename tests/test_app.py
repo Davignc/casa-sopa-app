@@ -150,8 +150,6 @@ PUBLICAS = {
     ("GET", "/health"),
     ("POST", "/auth/login"),
     ("POST", "/auth/login/json"),
-    ("POST", "/auth/recuperar-senha"),
-    ("POST", "/auth/redefinir-senha"),
     ("GET", "/sistema/logo"),  # a tela de login precisa da logo antes de entrar
 }
 

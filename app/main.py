@@ -13,7 +13,6 @@ from app.routers import (
     clientes,
     enderecos,
     estoque,
-    importacoes,
     pedidos,
     produtos,
     relatorios,
@@ -80,7 +79,6 @@ app.include_router(estoque.router)
 app.include_router(pedidos.router)
 app.include_router(relatorios.router)
 app.include_router(sistema.router)
-app.include_router(importacoes.router)
 
 
 @app.get("/health", tags=["infra"])

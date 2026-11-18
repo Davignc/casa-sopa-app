@@ -124,9 +124,6 @@ limitador_login_conta = LimitadorTentativas(settings.LOGIN_MAX_TENTATIVAS, _BLOQ
 # Por IP: barra quem testa muitas contas diferentes (limite maior).
 limitador_login_ip = LimitadorTentativas(settings.LOGIN_MAX_TENTATIVAS * 4, _BLOQUEIO_SEGUNDOS)
 revogador_tokens = RevogadorTokens()
-limitador_recuperacao_ip = LimitadorTentativas(10, 15 * 60)
-limitador_recuperacao_email = LimitadorTentativas(3, 15 * 60)
-limitador_redefinicao = LimitadorTentativas(20, 15 * 60)
 
 
 def limpar_tudo() -> None:
@@ -134,6 +131,3 @@ def limpar_tudo() -> None:
     limitador_login_conta.limpar()
     limitador_login_ip.limpar()
     revogador_tokens.limpar()
-    limitador_recuperacao_ip.limpar()
-    limitador_recuperacao_email.limpar()
-    limitador_redefinicao.limpar()
