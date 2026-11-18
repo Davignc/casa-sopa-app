@@ -1,0 +1,186 @@
+﻿ M .env.example
+ M .gitignore
+ M README.md
+ M app/core/config.py
+ M app/core/errors.py
+ M app/main.py
+ M app/routers/clientes.py
+ M app/routers/estoque.py
+ M app/routers/pedidos.py
+ M app/routers/relatorios.py
+ M app/routers/sistema.py
+ M app/schemas/cliente.py
+ M app/schemas/pedido.py
+ M app/schemas/produto.py
+ M app/schemas/relatorio.py
+ M app/schemas/sistema.py
+ M app/services/cliente.py
+ M app/services/cupom.py
+ M app/services/estoque.py
+ M app/services/pedido.py
+ M app/services/relatorio.py
+ M pyproject.toml
+ M tests/test_app.py
+ M tests/test_pedidos.py
+ M tests/test_relatorios.py
+ M uv.lock
+?? Microsoft/Windows/PowerShell/ModuleAnalysisCache
+?? RELATORIO_VALIDACAO.md
+?? app/assets/logo-padrao.png
+?? app/core/periodos.py
+?? app/core/spa.py
+?? app/routers/enderecos.py
+?? app/services/endereco.py
+?? app/services/logo.py
+?? app/web/assets/AddressPicker-8uSFjdBe.js
+?? app/web/assets/Clientes-DpztF4dc.js
+?? app/web/assets/Configuracoes-RiBTM6r-.js
+?? app/web/assets/FiltroPeriodo-DjjdT80k.js
+?? app/web/assets/HistoricoCliente-9sBBWDJK.js
+?? app/web/assets/Inicio-D-Bp6AQg.js
+?? app/web/assets/MovimentacoesProduto-CtF2X5tD.js
+?? app/web/assets/PedidoForm-Cr2BbuWn.js
+?? app/web/assets/Pedidos-7h7w0ZeK.js
+?? app/web/assets/Produtos-BxOrqBMQ.js
+?? app/web/assets/Relatorios-Ba9PrwMO.js
+?? app/web/assets/Usuarios-ZLQESyBX.js
+?? app/web/assets/arrow-left-B4ezRuso.js
+?? app/web/assets/download-BTO7SnRI.js
+?? app/web/assets/graficos-5GAn0Ght.js
+?? app/web/assets/hooks-d7vEO7dI.js
+?? app/web/assets/index-BbLP69QT.js
+?? app/web/assets/index-DBU-VlUe.css
+?? app/web/assets/inter-cyrillic-400-normal-HOLc17fK.woff
+?? app/web/assets/inter-cyrillic-400-normal-obahsSVq.woff2
+?? app/web/assets/inter-cyrillic-500-normal-BasfLYem.woff2
+?? app/web/assets/inter-cyrillic-500-normal-CxZf_p3X.woff
+?? app/web/assets/inter-cyrillic-600-normal-4D_pXhcN.woff
+?? app/web/assets/inter-cyrillic-600-normal-CWCymEST.woff2
+?? app/web/assets/inter-cyrillic-ext-400-normal-BQZuk6qB.woff2
+?? app/web/assets/inter-cyrillic-ext-400-normal-DQukG94-.woff
+?? app/web/assets/inter-cyrillic-ext-500-normal-B0yAr1jD.woff2
+?? app/web/assets/inter-cyrillic-ext-500-normal-BmqWE9Dz.woff
+?? app/web/assets/inter-cyrillic-ext-600-normal-Bcila6Z-.woff
+?? app/web/assets/inter-cyrillic-ext-600-normal-Dfes3d0z.woff2
+?? app/web/assets/inter-greek-400-normal-B4URO6DV.woff2
+?? app/web/assets/inter-greek-400-normal-q2sYcFCs.woff
+?? app/web/assets/inter-greek-500-normal-BIZE56-Y.woff2
+?? app/web/assets/inter-greek-500-normal-Xzm54t5V.woff
+?? app/web/assets/inter-greek-600-normal-BZpKdvQh.woff
+?? app/web/assets/inter-greek-600-normal-plRanbMR.woff2
+?? app/web/assets/inter-greek-ext-400-normal-DGGRlc-M.woff2
+?? app/web/assets/inter-greek-ext-400-normal-KugGGMne.woff
+?? app/web/assets/inter-greek-ext-500-normal-2j5mBUwD.woff
+?? app/web/assets/inter-greek-ext-500-normal-C4iEst2y.woff2
+?? app/web/assets/inter-greek-ext-600-normal-B8X0CLgF.woff
+?? app/web/assets/inter-greek-ext-600-normal-DRtmH8MT.woff2
+?? app/web/assets/inter-latin-400-normal-C38fXH4l.woff2
+?? app/web/assets/inter-latin-400-normal-CyCys3Eg.woff
+?? app/web/assets/inter-latin-500-normal-BL9OpVg8.woff
+?? app/web/assets/inter-latin-500-normal-Cerq10X2.woff2
+?? app/web/assets/inter-latin-600-normal-CiBQ2DWP.woff
+?? app/web/assets/inter-latin-600-normal-LgqL8muc.woff2
+?? app/web/assets/inter-latin-ext-400-normal-77YHD8bZ.woff
+?? app/web/assets/inter-latin-ext-400-normal-C1nco2VV.woff2
+?? app/web/assets/inter-latin-ext-500-normal-BxGbmqWO.woff
+?? app/web/assets/inter-latin-ext-500-normal-CV4jyFjo.woff2
+?? app/web/assets/inter-latin-ext-600-normal-CIVaiw4L.woff
+?? app/web/assets/inter-latin-ext-600-normal-D2bJ5OIk.woff2
+?? app/web/assets/inter-vietnamese-400-normal-Bbgyi5SW.woff
+?? app/web/assets/inter-vietnamese-400-normal-DMkecbls.woff2
+?? app/web/assets/inter-vietnamese-500-normal-DOriooB6.woff2
+?? app/web/assets/inter-vietnamese-500-normal-mJboJaSs.woff
+?? app/web/assets/inter-vietnamese-600-normal-BuLX-rYi.woff
+?? app/web/assets/inter-vietnamese-600-normal-Cc8MFFhd.woff2
+?? app/web/assets/plus-BZZM38SR.js
+?? app/web/assets/poppins-devanagari-600-normal-ClASKHrr.woff
+?? app/web/assets/poppins-devanagari-600-normal-STEjXBNN.woff2
+?? app/web/assets/poppins-devanagari-700-normal-O-jipLrW.woff2
+?? app/web/assets/poppins-devanagari-700-normal-fHs-vx92.woff
+?? app/web/assets/poppins-latin-600-normal-BJdTmd5m.woff
+?? app/web/assets/poppins-latin-600-normal-zEkxB9Mr.woff2
+?? app/web/assets/poppins-latin-700-normal-BVuQR_eA.woff
+?? app/web/assets/poppins-latin-700-normal-Qrb0O0WB.woff2
+?? app/web/assets/poppins-latin-ext-600-normal-CAhIAdZj.woff2
+?? app/web/assets/poppins-latin-ext-600-normal-Df5ffKXP.woff
+?? app/web/assets/poppins-latin-ext-700-normal-DctTR6Tg.woff
+?? app/web/assets/poppins-latin-ext-700-normal-cby-RkWa.woff2
+?? app/web/assets/power-BqpC_NqO.js
+?? app/web/assets/shopping-bag-B_WAgrcn.js
+?? app/web/assets/useMutation-uqjaI7rV.js
+?? app/web/index.html
+?? artifacts/validacao/arquivos-modificados.txt
+?? artifacts/validacao/backend-full-test-results.txt
+?? artifacts/validacao/backend-types-results.txt
+?? artifacts/validacao/banco-conexao-results.txt
+?? artifacts/validacao/frontend-build-results.txt
+?? artifacts/validacao/frontend-final-test-results.txt
+?? artifacts/validacao/frontend-test-results.txt
+?? artifacts/validacao/integracao-test-results.txt
+?? artifacts/validacao/pedidos-escuro.png
+?? frontend/index.html
+?? frontend/package-lock.json
+?? frontend/package.json
+?? frontend/postcss.config.js
+?? frontend/src/App.tsx
+?? frontend/src/components/AddressPicker.test.tsx
+?? frontend/src/components/AddressPicker.tsx
+?? frontend/src/components/ClienteSelect.test.tsx
+?? frontend/src/components/ClienteSelect.tsx
+?? frontend/src/components/CupomModal.test.tsx
+?? frontend/src/components/CupomModal.tsx
+?? frontend/src/components/FiltroPeriodo.test.tsx
+?? frontend/src/components/FiltroPeriodo.tsx
+?? frontend/src/components/HistoricoCliente.tsx
+?? frontend/src/components/Layout.test.tsx
+?? frontend/src/components/Layout.tsx
+?? frontend/src/components/Logo.tsx
+?? frontend/src/components/Privacidade.tsx
+?? frontend/src/components/Tema.tsx
+?? frontend/src/components/acessibilidade.test.tsx
+?? frontend/src/components/graficos.test.tsx
+?? frontend/src/components/graficos.tsx
+?? frontend/src/components/ui.test.tsx
+?? frontend/src/components/ui.tsx
+?? frontend/src/index.css
+?? frontend/src/lib/acessibilidade.ts
+?? frontend/src/lib/api.ts
+?? frontend/src/lib/auth.tsx
+?? frontend/src/lib/format.test.ts
+?? frontend/src/lib/format.ts
+?? frontend/src/lib/hooks.ts
+?? frontend/src/lib/permissoes.ts
+?? frontend/src/lib/types.ts
+?? frontend/src/main.tsx
+?? frontend/src/pages/Clientes.test.tsx
+?? frontend/src/pages/Clientes.tsx
+?? frontend/src/pages/Configuracoes.test.tsx
+?? frontend/src/pages/Configuracoes.tsx
+?? frontend/src/pages/Inicio.test.tsx
+?? frontend/src/pages/Inicio.tsx
+?? frontend/src/pages/Login.test.tsx
+?? frontend/src/pages/Login.tsx
+?? frontend/src/pages/MovimentacoesProduto.test.tsx
+?? frontend/src/pages/MovimentacoesProduto.tsx
+?? frontend/src/pages/NaoEncontrada.tsx
+?? frontend/src/pages/PedidoForm.test.tsx
+?? frontend/src/pages/PedidoForm.tsx
+?? frontend/src/pages/Pedidos.test.tsx
+?? frontend/src/pages/Pedidos.tsx
+?? frontend/src/pages/Produtos.test.tsx
+?? frontend/src/pages/Produtos.tsx
+?? frontend/src/pages/Relatorios.test.tsx
+?? frontend/src/pages/Relatorios.tsx
+?? frontend/src/pages/Usuarios.test.tsx
+?? frontend/src/pages/Usuarios.tsx
+?? frontend/src/test/dados.ts
+?? frontend/src/test/setup.ts
+?? frontend/src/test/utils.tsx
+?? frontend/tailwind.config.js
+?? frontend/tsconfig.json
+?? frontend/vite.config.ts
+?? tests/test_contrato_front.py
+?? tests/test_enderecos.py
+?? tests/test_graficos.py
+?? tests/test_logo.py
+?? tests/test_spa.py
