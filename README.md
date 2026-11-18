@@ -1,350 +1,268 @@
-# Casa de Sopa — Sistema de Gestão de Vendas
+# Casa da Sopa de Restinga — Sistema de Gestão (API)
 
-Sistema de gestão de vendas desenvolvido para a **Casa de Sopa**, ONG que promove o desenvolvimento social de crianças e adolescentes por meio de projetos culturais e esportivos, e que também distribui sopa a pessoas em situação de vulnerabilidade.
+API do sistema de gestão da **Casa da Sopa de Restinga**, organização social que arrecada
+recursos para suas ações de assistência à comunidade por meio da venda de sacos de lixo.
+O sistema informatiza clientes, produtos, estoque, pedidos e relatórios, e é de **uso
+interno**: só a administradora e as vendedoras acessam.
 
-A ONG financia suas atividades por meio da venda de sacos de lixo. Este sistema centraliza o controle dessas vendas, do estoque e dos valores recebidos, dando à equipe visibilidade sobre a verba arrecadada para sustentar os projetos sociais.
+> Projeto semestral — Fatec Franca. Referências: Documento de Requisitos, Diagrama de Casos de
+> Uso, Documento de Modelagem de Dados (v5) e `casa_da_sopa_banco.sql`.
 
----
+## Situação
 
-## Índice
-
-- [Funcionalidades](#funcionalidades)
-- [Stack](#stack)
-- [Pré-requisitos](#pré-requisitos)
-- [Configuração do ambiente](#configuração-do-ambiente)
-- [Banco de dados](#banco-de-dados)
-- [Rodando o projeto](#rodando-o-projeto)
-- [Testes](#testes)
-- [Qualidade de código](#qualidade-de-código)
-- [Estrutura do projeto](#estrutura-do-projeto)
-- [Variáveis de ambiente](#variáveis-de-ambiente)
-- [Fluxo de trabalho com Git](#fluxo-de-trabalho-com-git)
-- [Comandos úteis](#comandos-úteis)
-
----
-
-## Funcionalidades
-
-- Registro e acompanhamento de vendas
-- Controle de estoque de produtos
-- Acompanhamento dos valores recebidos
-- Anexo de comprovantes de PIX
-- Relatórios financeiros e de estoque
-
----
+| Módulo | Requisitos | Situação |
+|---|---|---|
+| Autenticação e usuários | RF01–RF06 | ✅ |
+| Clientes e endereços | RF07–RF10 | ✅ |
+| Produtos e estoque | RF17–RF25 | ✅ |
+| Pedidos, status e cupom em PDF | RF11–RF16, RF26 | ✅ |
+| Dashboard e relatórios | RF27–RF28 | ✅ |
+| Backup semanal | RNF03 | ✅ |
+| Front-end (React): todas as telas, gráficos e troca de logo | — | ✅ |
 
 ## Stack
 
-| Camada | Tecnologia |
-|---|---|
-| Linguagem | Python 3.12 |
-| Gerenciador de pacotes | uv |
-| API | FastAPI |
-| ORM | SQLAlchemy 2.x |
-| Migrations | Alembic |
-| Banco de dados | PostgreSQL |
-| Driver | psycopg 3 |
-| Testes | pytest |
-| Lint / Format | Ruff |
-| Storage de arquivos | Cloudflare R2 (compatível com S3) |
+Python 3.12 · [uv](https://docs.astral.sh/uv/) · FastAPI · SQLAlchemy 2 + Alembic · PostgreSQL
+(psycopg 3) · bcrypt + PyJWT · ReportLab (PDF) · openpyxl (planilhas) · APScheduler (backup) ·
+pytest · Ruff · mypy. Front-end: React 19 · TypeScript · Vite · Tailwind · TanStack Query · Recharts · Vitest.
 
----
+## Começando
 
-## Pré-requisitos
-
-- **uv** — gerenciador de pacotes e versões do Python
-- **PostgreSQL** — local ou em nuvem
-- **Git**
-
-### Instalando o uv
+Pré-requisitos: uv, Git e um PostgreSQL (ou use o SQLite, abaixo). O uv baixa o Python certo.
 
 ```bash
-# Linux / macOS
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows (PowerShell)
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+git clone <url-do-repositorio> && cd casa-sopa-app
+uv sync                      # no Windows/OneDrive: $env:UV_LINK_MODE = "copy" antes
+cp .env.example .env         # edite: SECRET_KEY (mín. 32 caracteres) e o banco
+uv run alembic upgrade head  # cria as tabelas
+uv run python -m app.cli criar-admin --nome "Nome" --email admin@exemplo.org --telefone 16999990000
+uv run fastapi dev app/main.py   # http://localhost:8000/docs
 ```
 
-Confirme a instalação:
+**Banco com Docker:**
+`docker run --name casa-sopa-db -e POSTGRES_USER=casa_sopa -e POSTGRES_PASSWORD=casa_sopa -e POSTGRES_DB=casa_sopa -p 5432:5432 -d postgres:16`
+(e `CREATE DATABASE casa_sopa_test;` para os testes).
+
+**Sem Docker nem PostgreSQL (SQLite, só desenvolvimento/testes):** no `.env`, use
+`DATABASE_URL=sqlite:///./casa_sopa_dev.db` e `TEST_DATABASE_URL=sqlite://`. Ele não impõe o
+tamanho de `VARCHAR` nem guarda fuso; a entrega deve usar PostgreSQL e a suíte deve passar nos dois.
+
+## Front-end
+
+O sistema já vem **compilado** em `app/web` e é servido pelo próprio backend: depois de `uv run fastapi dev app/main.py`,
+abra <http://localhost:8000>. **Não precisa de Node.js** para usar. Página e API ficam na mesma origem (sem CORS).
+
+| Tela | Quem | O que faz |
+|---|---|---|
+| Entrar | todos | Login com bloqueio de tentativas; logo da ONG |
+| Início | todos | Administradora: resumo do mês e gráficos. Vendedora: andamento dos pedidos e atalhos. Estoque baixo e últimos pedidos |
+| Clientes | todos | Cadastro, endereços (buscar um já registrado ou criar novo), histórico de compras |
+| Pedidos | todos | Abas com contagem, mudança de situação com confirmação, cupom em PDF, novo pedido e edição |
+| Produtos | todos | Cadastro e alerta de estoque baixo. **Administradora:** entradas, saídas e histórico de movimentações de cada produto, com filtros e gráfico |
+| Relatórios | administradora | Gráficos que mudam conforme período, vendedora e agrupamento; comissões; exportar Excel/CSV |
+| Usuários | administradora | Cadastro, edição, inativação e troca de senha |
+| Configurações | administradora | Troca da logo e situação/execução do backup |
+
+Pontos de comportamento:
+
+- **Endereço:** ao cadastrar cliente ou pedido, dá para *buscar um endereço já registrado* (de qualquer cliente) ou *cadastrar um
+  novo*. Ao escolher um registrado, aparece a seção "Dados deste endereço para este cliente" (número, complemento, referência
+  e apelido), que é a relação cliente-endereço. No pedido, o endereço novo é guardado também no cadastro do cliente.
+- **Gráficos:** vêm de `/relatorios/analise` e de `/estoque/movimentacoes/resumo`; mudar qualquer filtro refaz a consulta.
+- **Logo:** a administradora troca em Configurações (PNG, JPG ou WebP, até 2 MB; o servidor confere o conteúdo e regrava o
+  arquivo). Vale no menu, no login, na aba do navegador e no cupom impresso.
+- **Segurança:** o token fica em `sessionStorage` (some ao fechar a aba); a página só carrega scripts do próprio servidor
+  (CSP restritiva); as telas restritas também são barradas no servidor, que é quem decide.
+- **Não incluído:** o protótipo mostrava *Caixa*, *taxa de entrega*, *valor recebido* e *data/hora de entrega*. Não estão nos
+  requisitos nem no modelo de dados (`casa_da_sopa_banco.sql`), então não foram feitos.
+
+### Alterar o front (precisa de Node.js 20+)
 
 ```bash
-uv --version
+cd frontend
+npm install
+npm run dev      # http://localhost:5173, conversando com a API em :8000 (rode o backend junto)
+npm test         # testes (Vitest)
+npm run build    # compila para ../app/web  (commite o resultado)
 ```
 
-> Não é necessário instalar o Python manualmente. O `uv` cuida disso a partir do arquivo `.python-version` do projeto.
+## API
 
----
+Documentação interativa em `/docs` (desligada com `ENVIRONMENT=production`). Todas as rotas,
+exceto login e `/health`, exigem `Authorization: Bearer <token>`. **Admin** = administradora;
+**Todos** = administradora e vendedora.
 
-## Configuração do ambiente
+| Área | Rotas | Quem |
+|---|---|---|
+| Autenticação | `POST /auth/login` (form) · `POST /auth/login/json` · `POST /auth/logout` · `GET /usuarios/me` | Todos |
+| Usuários | `POST/GET /usuarios` · `GET/PATCH/DELETE /usuarios/{id}` · `POST /usuarios/{id}/reativar` | Admin |
+| Clientes | `POST/GET /clientes` · `GET/PATCH/DELETE /clientes/{id}` · `POST .../reativar` | Todos |
+| Endereços | `GET /enderecos?busca=` (já registrados) · `POST /clientes/{id}/enderecos` (novo, ou `id_endereco` de um existente) · `PATCH/DELETE /clientes/{id}/enderecos/{id_endereco}` | Todos |
+| Produtos | `POST/GET /produtos` · `GET/PATCH/DELETE /produtos/{id}` · `POST .../reativar` | Todos |
+| Estoque | `GET /estoque/alertas` | Todos |
+| | `POST /estoque/entradas` · `POST /estoque/saidas` · `GET /estoque/movimentacoes` · `GET /estoque/movimentacoes/resumo` | Admin |
+| Pedidos | `POST/GET /pedidos` · `GET /pedidos/contagem` (por situação) · `GET/PATCH/DELETE /pedidos/{id}` · `POST /pedidos/{id}/status` · `GET /pedidos/{id}/cupom` | Todos |
+| Relatórios | `GET /relatorios/dashboard` · `/relatorios/analise` (gráficos) · `/relatorios/vendas` · `/relatorios/vendas/pedidos` · `/relatorios/vendas/exportar` | Admin |
+| Sistema | `GET/POST /sistema/backup` · `POST/DELETE /sistema/logo` · `GET /sistema/logo/situacao` | Admin |
+| | `GET /sistema/logo` (a tela de login precisa dela) | Pública |
 
-### 1. Clone o repositório
+Listagens são paginadas (`limit` até 100, `offset`) e devolvem `{itens, total, limit, offset}`.
+Erros vêm como `{"detail": "mensagem em português"}`; 401 sem login, 403 sem permissão, 404 não
+encontrado, 409 conflito com o estado atual, 422 dado inválido, 429 muitas tentativas de login.
+
+## Regras de negócio adotadas
+
+Pontos que os documentos não detalham e que ficaram definidos assim (mudam em um só lugar):
+
+**Pedidos**
+- Status: `em_aberto → confirmado → entregue`; `cancelado` vale a partir de em aberto ou confirmado.
+  `entregue` e `cancelado` são finais.
+- O cliente da API envia só produtos e quantidades. **Preço, subtotal e total são calculados no
+  servidor** com o preço do cadastro; o preço do item fica gravado e não muda com reajustes.
+- O estoque **só muda na confirmação** (baixa; `409` listando o que falta) e no **cancelamento de
+  pedido confirmado** (devolução). Tudo vira registro em `movimentacoes`. Pedido em aberto pode
+  ser criado sem estoque suficiente.
+- Edição: em aberto, tudo; confirmado, só pagamento, endereço e observação; entregue/cancelado,
+  nada. A vendedora responsável não muda (RN10). Só pedido em aberto pode ser excluído (RN11).
+- O endereço de entrega precisa ser um endereço **ativo do próprio cliente** (RM05).
+- Cupom (PDF A5, uma página por via): `via=interna|entregador|cliente|todas`. Pedido cancelado não gera cupom.
+
+**Estoque e produtos**
+- A quantidade só muda por entrada, saída ou venda, nunca por edição do produto, então a soma do
+  histórico sempre bate com o estoque. A quantidade inicial entra como 1ª movimentação.
+- Alerta (RN14): ativo e `estoque_atual <= estoque_minimo`.
+- Entradas e saídas manuais são da administradora. Como `movimentacoes` não tem coluna de usuário,
+  o responsável vai no final da observação (`[por Nome]`).
+
+**Clientes**
+- Telefone único, gravado só com dígitos. Endereço físico igual (CEP, cidade, bairro, logradouro) é
+  reaproveitado entre clientes; número, complemento e referência são de cada cliente.
+- Remover endereço: nunca usado em pedido, é apagado; usado, é inativado; usado e compartilhado com
+  outro cliente, recusa. Para corrigir rua/CEP, cadastre o novo e remova o antigo.
+
+**Relatórios**
+- "Venda" = pedido confirmado ou entregue, pela data da venda no fuso `TIMEZONE`. Dashboard = últimos 30 dias.
+- Comissão = valor × percentual **atual** da vendedora: «a receber» sobre os entregues, «pendente»
+  sobre os confirmados. (O modelo não guarda o percentual da época da venda.)
+- Exportação: XLSX (resumo + pedidos) ou CSV (pedidos, `;` e vírgula decimal). Textos que começam
+  com `= + - @` são neutralizados contra injeção de fórmula.
+
+## Segurança
+
+- **Senhas novas:** mínimo de 8 caracteres, com letra maiúscula, minúscula, número e símbolo;
+  máximo de 72 bytes (limite do bcrypt). Cadastro, troca de senha e criação de administradora
+  pelo terminal aplicam a mesma regra. A tela mostra os requisitos durante a digitação.
+  Senhas existentes continuam válidas no login. Os caracteres da senha, inclusive espaços,
+  são preservados; espaços não contam como símbolo.
+- **Login:** após `LOGIN_MAX_TENTATIVAS` erros (5) a resposta vira `429` por `LOGIN_BLOQUEIO_MINUTOS`
+  (15), por par IP+e-mail e por IP; mensagem e tempo iguais para e-mail inexistente (sem enumerar contas).
+- **Sessão:** JWT (HS256) com id único; o logout o revoga; trocar a senha de um usuário derruba as
+  sessões dele; o cargo e a situação ativa são lidos do banco a cada requisição.
+- **Entrada:** campos desconhecidos são recusados (sem *mass assignment*); e-mail/telefone/CEP normalizados.
+- **Banco:** CHECKs, UNIQUEs e FKs do script SQL valem mesmo se a API falhar (`tests/test_modelagem.py`);
+  linhas de pedido e produto são bloqueadas (`FOR UPDATE`) contra confirmação/venda simultânea.
+- **HTTP:** `nosniff`, `X-Frame-Options`, `no-store`; CORS só para `CORS_ORIGINS`; erros 500 não vazam detalhes.
+- **Limite conhecido:** bloqueio de login e tokens revogados ficam **em memória** (valem por processo e
+  zeram ao reiniciar). Com um único servidor atende; se crescer, mover para Redis. Atrás de proxy
+  reverso, rode o uvicorn com `--proxy-headers`.
+
+## Backup (RNF03)
+
+Com `BACKUP_ENABLED=true`, o servidor roda `pg_dump` toda semana (`BACKUP_DIA_SEMANA`, `BACKUP_HORA`,
+no fuso configurado), mantém os `BACKUP_RETENCAO` mais recentes em `BACKUP_DIR` e, se o servidor estava
+desligado na hora, roda ao voltar. `GET /sistema/backup` mostra o resultado; o campo **`alerta`**
+acende se a última tentativa falhou, se passou de 8 dias sem backup ou se está desligado em produção
+(o front deve exibir `motivo_alerta` em destaque). `POST /sistema/backup` faz um backup na hora.
+Requer o `pg_dump` instalado (ou `PG_DUMP_PATH`). A senha vai por variável de ambiente, nunca na linha de comando.
+
+**Restaurar** (testado): crie um banco vazio e rode
+`pg_restore --no-owner -h <host> -U <usuario> -d <banco_vazio> backups/casa_sopa_AAAAMMDD_HHMMSS.dump`
+
+Os arquivos têm **todos os dados**, inclusive os hashes de senha: proteja a pasta e copie-os para fora do servidor.
+
+## Logo e arquivos enviados
+
+A logo personalizada fica em `UPLOADS_DIR` (padrão `uploads/`, fora do Git). Sem ela, vale a logo padrão em
+`app/assets/logo-padrao.png`. O envio aceita só PNG, JPG e WebP, confere o **conteúdo** (não o nome nem o tipo informado),
+recusa SVG e imagens enormes e regrava como PNG de até 512 px, descartando metadados.
+
+## Modelo de dados
+
+Oito tabelas conforme `casa_da_sopa_banco.sql` (colunas em `snake_case`): `usuario`, `produto`,
+`cliente`, `endereco`, `cliente_endereco`, `vendas`, `item_vendas`, `movimentacoes`. Exclusão lógica
+por `is_ativo` (nada é apagado, RM06). Lacunas conhecidas do modelo: não há data/horário de entrega
+no pedido (RF11/RF14), nem usuário em `movimentacoes` (RF22, contornado na observação), nem colunas
+de bloqueio de login (feito em memória).
 
 ```bash
-git clone <url-do-repositorio>
-cd casa_sopa
+uv run alembic revision --autogenerate -m "descricao"   # após alterar app/models/
+uv run alembic upgrade head | downgrade -1 | check
 ```
 
-### 2. Instale as dependências
+## Testes e qualidade
+
+Relatórios incluem pedidos de vendedoras e administradoras. O filtro **Perfil de usuário**
+permite selecionar só vendedoras, só administradoras ou todos; **Responsável** filtra uma
+pessoa, inclusive inativa. Gráficos, totais e exportações CSV/Excel usam os mesmos filtros.
+Administradoras não recebem comissão. A API mantém `id_vendedora`, `vendedoras` e
+`por_vendedora` por compatibilidade, aceitando também administradoras; `cargo` é opcional.
+
+Somente a vendedora responsável pelo pedido e as administradoras podem editar, excluir
+ou alterar seu status. A autorização é conferida no servidor antes de modificar dados
+ou estoque, inclusive quando a chamada é feita diretamente à API.
+
+A interface oferece modo escuro no login e no cabeçalho, com preferência salva neste
+navegador; sem escolha salva, acompanha o sistema. Há foco visível, atalho para o conteúdo,
+abas operáveis por setas/Home/End, seleção de pedidos por teclado e diálogos/menu móvel
+com foco contido e fechamento por Escape. Animações respeitam movimento reduzido.
+
+Formulários de clientes, usuários, pedidos e login apresentam a finalidade do uso de
+dados e orientações de atendimento. Esses avisos são medidas de transparência, não uma
+certificação de conformidade integral com a LGPD. A administração deve definir o canal
+de atendimento, a base legal aplicável e os prazos de guarda conforme suas operações.
+Inativação mantém o histórico e não equivale à exclusão. Referência:
+[orientações da ANPD](https://www.gov.br/anpd/pt-br/acesso-a-informacao/perguntas-frequentes).
 
 ```bash
-uv sync
+uv run pytest                                        # toda a suíte
+uv run pytest --cov=app --cov-report=term-missing    # com cobertura
+uv run ruff check . && uv run ruff format --check .  # lint e formatação
+uv run mypy app/                                     # tipos
+uv run pre-commit install                            # lint/format a cada commit
 ```
 
-Este comando cria o ambiente virtual em `.venv/`, baixa a versão correta do Python e instala todas as dependências travadas no `uv.lock`.
+A suíte do backend (~760 testes) roda em PostgreSQL e em SQLite; o front tem ~315 (`npm test`).
+`test_app.py` varre **todas as operações da API** (lidas do OpenAPI) e falha se alguma de dados ficar sem login.
+`test_contrato_front.py` lê o código do front e falha se ele chamar uma rota que a API não tem.
 
-> **Não é preciso ativar o `.venv` manualmente.** Use `uv run <comando>` e o uv resolve o ambiente automaticamente.
-
-### 3. Configure as variáveis de ambiente
-
-```bash
-cp .env.example .env
-```
-
-Edite o `.env` com os valores do seu ambiente local. Veja a seção [Variáveis de ambiente](#variáveis-de-ambiente).
-
----
-
-## Banco de dados
-
-### Subindo um Postgres local com Docker
-
-```bash
-docker run --name casa-sopa-db \
-  -e POSTGRES_USER=casa_sopa \
-  -e POSTGRES_PASSWORD=casa_sopa \
-  -e POSTGRES_DB=casa_sopa \
-  -p 5432:5432 \
-  -d postgres:16
-```
-
-A `DATABASE_URL` correspondente:
+## Estrutura
 
 ```
-postgresql+psycopg://casa_sopa:casa_sopa@localhost:5432/casa_sopa
+app/
+├── main.py        # app, CORS, cabeçalhos, ciclo de vida (backup)
+├── cli.py         # criar-admin
+├── api/deps.py    # sessão, usuário atual, permissões (AdminAtual, OperadorAtual)
+├── core/          # config, segurança, proteções, erros, validadores, fuso, períodos, SPA
+├── models/        # tabelas  ·  schemas/ entrada e saída  ·  routers/ endpoints
+└── services/      # regras de negócio (pedido, estoque, relatório, cupom, backup...)
+alembic/versions/  # migrations  ·  tests/
+frontend/          # código-fonte do front (React)  ·  app/web/  # front compilado, servido pelo backend
 ```
-
-### Aplicando as migrations
-
-```bash
-uv run alembic upgrade head
-```
-
-### Criando uma nova migration
-
-Sempre que alterar ou criar um modelo em `app/models/`:
-
-```bash
-uv run alembic revision --autogenerate -m "descricao da mudanca"
-uv run alembic upgrade head
-```
-
-> Revise o arquivo gerado em `alembic/versions/` antes de commitar. O autogenerate não detecta tudo (renomeações de coluna, mudanças de tipo em alguns casos).
-
-### Desfazendo a última migration
-
-```bash
-uv run alembic downgrade -1
-```
-
----
-
-## Rodando o projeto
-
-```bash
-uv run fastapi dev app/main.py
-```
-
-A API sobe em `http://localhost:8000` com reload automático.
-
-Documentação interativa:
-
-- Swagger UI — http://localhost:8000/docs
-- ReDoc — http://localhost:8000/redoc
-
----
-
-## Testes
-
-```bash
-# rodar toda a suíte
-uv run pytest
-
-# com relatório de cobertura
-uv run pytest --cov=app --cov-report=term-missing
-
-# um arquivo específico
-uv run pytest tests/test_vendas.py
-
-# um teste específico
-uv run pytest tests/test_vendas.py::test_criar_venda
-```
-
----
-
-## Qualidade de código
-
-```bash
-# verificar problemas
-uv run ruff check .
-
-# corrigir automaticamente o que for possível
-uv run ruff check . --fix
-
-# formatar
-uv run ruff format .
-
-# checagem de tipos
-uv run mypy app/
-```
-
-### Hooks de pre-commit
-
-Instale uma única vez após clonar:
-
-```bash
-uv run pre-commit install
-```
-
-A partir daí, lint e format rodam automaticamente a cada commit.
-
----
-
-## Estrutura do projeto
-
-```
-casa_sopa/
-├── alembic/
-│   └── versions/          # migrations (versionadas!)
-├── app/
-│   ├── main.py            # instância do FastAPI
-│   ├── core/
-│   │   └── config.py      # settings via pydantic-settings
-│   ├── db/
-│   │   ├── base.py        # Base declarativa do SQLAlchemy
-│   │   └── session.py     # engine e sessão
-│   ├── models/            # modelos SQLAlchemy (tabelas)
-│   ├── schemas/           # schemas Pydantic (entrada/saída)
-│   ├── routers/           # endpoints da API
-│   └── services/          # regras de negócio
-├── tests/
-├── .env.example
-├── .python-version
-├── alembic.ini
-├── pyproject.toml
-└── uv.lock
-```
-
-### Onde colocar cada coisa
-
-| Preciso de... | Vai em... |
-|---|---|
-| Uma nova tabela | `app/models/` |
-| Validação de request/response | `app/schemas/` |
-| Um novo endpoint | `app/routers/` |
-| Regra de negócio, cálculo | `app/services/` |
-| Uma configuração nova | `app/core/config.py` + `.env.example` |
-
----
 
 ## Variáveis de ambiente
 
-Todas ficam no `.env` (que **não** é versionado). Use o `.env.example` como referência.
+Ficam no `.env` (**nunca** versionado); o `.env.example` lista todas, com comentários.
+Obrigatórias: `DATABASE_URL` e `SECRET_KEY` (≥ 32 caracteres). Gere a chave com
+`uv run python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 
-| Variável | Descrição |
-|---|---|
-| `DATABASE_URL` | String de conexão do PostgreSQL |
-| `SECRET_KEY` | Chave para assinatura dos tokens JWT |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Tempo de expiração do token de acesso |
-| `S3_ENDPOINT_URL` | Endpoint do bucket (Cloudflare R2) |
-| `S3_ACCESS_KEY_ID` | Chave de acesso do bucket |
-| `S3_SECRET_ACCESS_KEY` | Segredo de acesso do bucket |
-| `S3_BUCKET_NAME` | Nome do bucket dos comprovantes |
-| `ENVIRONMENT` | `development`, `staging` ou `production` |
+## Git
 
-> Nunca commite o `.env`. Se adicionar uma variável nova, adicione também ao `.env.example` (sem o valor real) para o resto da equipe saber que ela existe.
+Branch `feat/...` a partir de `dev`, commits `feat: / fix: / refactor: / test: / docs: / chore:`, Pull
+Request para `dev`. Versione `pyproject.toml` + `uv.lock`, `.python-version`, `alembic/versions/*.py` e `.env.example`.
 
-Para gerar uma `SECRET_KEY`:
+## Problemas comuns
 
-```bash
-uv run python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
-
----
-
-## Fluxo de trabalho com Git
-
-1. Atualize a `main` e crie sua branch:
-
-   ```bash
-   git checkout main
-   git pull
-   git checkout -b feat/nome-da-funcionalidade
-   ```
-
-2. Desenvolva, rodando os testes conforme avança:
-
-   ```bash
-   uv run pytest
-   ```
-
-3. Commit e push:
-
-   ```bash
-   git add .
-   git commit -m "feat: adiciona registro de vendas"
-   git push -u origin feat/nome-da-funcionalidade
-   ```
-
-4. Abra o Pull Request.
-
-### Prefixos de commit
-
-| Prefixo | Quando usar |
-|---|---|
-| `feat:` | Nova funcionalidade |
-| `fix:` | Correção de bug |
-| `refactor:` | Mudança de código sem alterar comportamento |
-| `test:` | Adição ou ajuste de testes |
-| `docs:` | Documentação |
-| `chore:` | Configuração, dependências, tarefas de manutenção |
-
-### Arquivos que devem ser commitados
-
-- `pyproject.toml` e `uv.lock` — sempre juntos, ao adicionar ou remover dependências
-- `.python-version`
-- `alembic/versions/*.py` — as migrations são parte do código
-- `.env.example` — sempre que uma variável nova for adicionada
-
----
-
-## Comandos úteis
-
-| Ação | Comando |
-|---|---|
-| Instalar dependências | `uv sync` |
-| Adicionar uma lib | `uv add <pacote>` |
-| Adicionar lib de desenvolvimento | `uv add --dev <pacote>` |
-| Remover uma lib | `uv remove <pacote>` |
-| Atualizar dependências | `uv sync --upgrade` |
-| Ver árvore de dependências | `uv tree` |
-| Rodar a API | `uv run fastapi dev app/main.py` |
-| Rodar os testes | `uv run pytest` |
-| Aplicar migrations | `uv run alembic upgrade head` |
-| Abrir um shell Python no projeto | `uv run python` |
-
----
-
-## Solução de problemas
-
-**`uv sync` reclama da versão do Python**
-
-O projeto está pinado no `.python-version`. Rode `uv python install` para que o uv baixe a versão correta.
-
-**Erro de conexão com o banco**
-
-Verifique se o Postgres está rodando (`docker ps`) e se a `DATABASE_URL` no `.env` bate com as credenciais do container.
-
-**Alembic não encontra os modelos no autogenerate**
-
-Todo modelo novo precisa ser importado em `app/db/base.py`, senão o Alembic não enxerga a tabela.
+- **`uv sync` com `os error 396`** (pasta no OneDrive): `$env:UV_LINK_MODE = "copy"`.
+- **Não sobe e cita `SECRET_KEY`:** vazia ou com menos de 32 caracteres.
+- **Backup falha com "pg_dump não encontrado":** instale o cliente do PostgreSQL ou defina `PG_DUMP_PATH`.
+- **Alembic não vê tabela nova:** importe o modelo em `app/db/base.py`.
