@@ -51,6 +51,9 @@ docker run --name casa-sopa-db \
   -e POSTGRES_USER=casa_sopa -e POSTGRES_PASSWORD=casa_sopa -e POSTGRES_DB=casa_sopa \
   -p 5432:5432 -v casa-sopa-pgdata:/var/lib/postgresql/data -d postgres:16
 
+# espere o PostgreSQL terminar de iniciar (na 1ª vez leva alguns segundos)
+until docker exec casa-sopa-db pg_isready -U casa_sopa >/dev/null 2>&1; do sleep 1; done
+
 # banco da suíte de testes (é recriado a cada execução do pytest)
 docker exec -it casa-sopa-db psql -U casa_sopa -c "CREATE DATABASE casa_sopa_test;"
 ```
@@ -122,6 +125,18 @@ As migrations usam IDs sequenciais (`0001`, `0002`…). Histórico atual:
 |---|---|
 | `0001` | Schema inicial conforme `casa_da_sopa_banco.sql` (8 tabelas, CHECKs, UNIQUEs, FKs) |
 | `0002` | Tabela `venda_importada` (referências de vendas antigas importadas, contra duplicação). A importação foi removida do sistema; a tabela e o modelo ficam só para não perder dados de bancos já migrados |
+| `0003` | **Dados de exemplo** para desenvolvimento (ver abaixo) |
+
+**Dados de exemplo (`0003`).** Popula 4 vendedoras (1 inativa), 8 produtos (2 com estoque baixo),
+18 clientes com endereços em Restinga e Franca e 70 pedidos espalhados nos últimos 4 meses, em todas
+as situações, com movimentações de estoque coerentes. As datas são relativas ao dia em que a
+migration roda. Login das vendedoras: `ana@exemplo.casadasopa.dev`, `beatriz@…`, `carla@…`
+(`denise@…` está inativa), senha **`Exemplo@123`**. A administradora continua sendo a criada pelo
+`criar-admin`.
+
+Ela **não faz nada** com `ENVIRONMENT=production` ou se já existir algum produto cadastrado (aparece
+um aviso no `upgrade`). Para tirar os dados: `uv run alembic downgrade 0002` (remove só o que ela criou).
+Para gerar de novo com datas atualizadas: `uv run alembic downgrade 0002 && uv run alembic upgrade head`.
 
 **Erro `Can't locate revision identified by 'dfa3097f5933'`:** o banco foi criado com a primeira
 versão das migrations, que foi substituída pela `0001` quando os modelos foram alinhados ao script
