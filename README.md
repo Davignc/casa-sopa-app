@@ -28,24 +28,131 @@ pytest · Ruff · mypy. Front-end: React 19 · TypeScript · Vite · Tailwind ·
 
 ## Começando
 
-Pré-requisitos: uv, Git e um PostgreSQL (ou use o SQLite, abaixo). O uv baixa o Python certo.
+Pré-requisitos: [uv](https://docs.astral.sh/uv/), Git e um PostgreSQL 16 (via Docker, instalado na
+máquina ou, só para desenvolvimento, SQLite). O uv baixa o Python 3.12 sozinho. Node.js **não** é
+necessário para rodar o sistema, só para alterar o front.
+
+### 1. Código e dependências
 
 ```bash
-git clone <url-do-repositorio> && cd casa-sopa-app
-uv sync                      # no Windows/OneDrive: $env:UV_LINK_MODE = "copy" antes
-cp .env.example .env         # edite: SECRET_KEY (mín. 32 caracteres) e o banco
-uv run alembic upgrade head  # cria as tabelas
-uv run python -m app.cli criar-admin --nome "Nome" --email admin@exemplo.org --telefone 16999990000
-uv run fastapi dev app/main.py   # http://localhost:8000/docs
+git clone git@github.com:Davignc/casa-sopa-app.git && cd casa-sopa-app
+git checkout dev             # o trabalho do dia a dia parte da dev
+uv sync                      # cria .venv com as dependências (inclui as de dev/teste)
 ```
 
-**Banco com Docker:**
-`docker run --name casa-sopa-db -e POSTGRES_USER=casa_sopa -e POSTGRES_PASSWORD=casa_sopa -e POSTGRES_DB=casa_sopa -p 5432:5432 -d postgres:16`
-(e `CREATE DATABASE casa_sopa_test;` para os testes).
+No Windows dentro do OneDrive, rode `$env:UV_LINK_MODE = "copy"` antes do `uv sync`.
 
-**Sem Docker nem PostgreSQL (SQLite, só desenvolvimento/testes):** no `.env`, use
+### 2. Banco de dados
+
+**Opção A — PostgreSQL no Docker (recomendada):**
+
+```bash
+docker run --name casa-sopa-db \
+  -e POSTGRES_USER=casa_sopa -e POSTGRES_PASSWORD=casa_sopa -e POSTGRES_DB=casa_sopa \
+  -p 5432:5432 -v casa-sopa-pgdata:/var/lib/postgresql/data -d postgres:16
+
+# banco da suíte de testes (é recriado a cada execução do pytest)
+docker exec -it casa-sopa-db psql -U casa_sopa -c "CREATE DATABASE casa_sopa_test;"
+```
+
+Nos dias seguintes basta `docker start casa-sopa-db`. O volume `casa-sopa-pgdata` mantém os dados
+mesmo se o contêiner for removido.
+
+**Opção B — PostgreSQL instalado na máquina:** crie o usuário e os bancos com o mesmo nome/senha
+acima (ou ajuste as URLs no `.env`):
+
+```sql
+CREATE USER casa_sopa WITH PASSWORD 'casa_sopa';
+CREATE DATABASE casa_sopa OWNER casa_sopa;
+CREATE DATABASE casa_sopa_test OWNER casa_sopa;
+```
+
+**Opção C — SQLite (sem servidor, só desenvolvimento/testes):** no `.env`, use
 `DATABASE_URL=sqlite:///./casa_sopa_dev.db` e `TEST_DATABASE_URL=sqlite://`. Ele não impõe o
 tamanho de `VARCHAR` nem guarda fuso; a entrega deve usar PostgreSQL e a suíte deve passar nos dois.
+
+### 3. Configuração (`.env`)
+
+```bash
+cp .env.example .env
+uv run python -c "import secrets; print(secrets.token_urlsafe(32))"   # cole em SECRET_KEY
+```
+
+As URLs do `.env.example` já apontam para o PostgreSQL da opção A. O `.env` nunca vai para o Git.
+
+### 4. Tabelas, primeira administradora e servidor
+
+```bash
+uv run alembic upgrade head      # cria/atualiza as tabelas até a última migration
+uv run python -m app.cli criar-admin --nome "Nome" --email admin@exemplo.org --telefone 16999990000
+uv run fastapi dev app/main.py   # sistema em http://localhost:8000 · API em /docs
+```
+
+O `criar-admin` pede a senha no terminal (regras de senha forte valem aqui também); para uso não
+interativo, defina `CASA_SOPA_ADMIN_SENHA`. Só é preciso uma vez: as demais contas são criadas pela
+administradora na tela **Usuários**.
+
+### 5. Conferir que está tudo certo
+
+```bash
+curl http://localhost:8000/health      # {"status":"ok","environment":"development"}
+uv run alembic current                 # deve mostrar a mesma revisão que "uv run alembic heads"
+uv run pytest                          # suíte completa (usa TEST_DATABASE_URL)
+```
+
+## Atualizar o banco local (migration mais recente)
+
+Sempre que fizer `git pull`/merge que traga algo em `alembic/versions/` ou em `app/models/`:
+
+```bash
+git pull                       # ou merge da dev na sua branch
+uv sync                        # se o uv.lock mudou
+uv run alembic current         # revisão aplicada no seu banco
+uv run alembic heads           # última revisão do código
+uv run alembic upgrade head    # aplica o que falta, em ordem
+uv run alembic check           # confirma que os modelos e o banco batem (sem diferenças)
+```
+
+Se `current` e `heads` mostrarem a mesma revisão, não há nada a aplicar. Para ver o SQL antes de
+rodar: `uv run alembic upgrade <atual>:head --sql`. Para desfazer a última: `uv run alembic downgrade -1`.
+
+As migrations usam IDs sequenciais (`0001`, `0002`…). Histórico atual:
+
+| Revisão | O que faz |
+|---|---|
+| `0001` | Schema inicial conforme `casa_da_sopa_banco.sql` (8 tabelas, CHECKs, UNIQUEs, FKs) |
+| `0002` | Tabela `venda_importada` (referências de vendas antigas importadas, contra duplicação). A importação foi removida do sistema; a tabela e o modelo ficam só para não perder dados de bancos já migrados |
+
+**Erro `Can't locate revision identified by 'dfa3097f5933'`:** o banco foi criado com a primeira
+versão das migrations, que foi substituída pela `0001` quando os modelos foram alinhados ao script
+SQL. O schema antigo é diferente, então **não** adianta só fazer `stamp`: recrie o banco local.
+
+```bash
+# PostgreSQL no Docker (apaga os dados locais)
+docker exec -it casa-sopa-db psql -U casa_sopa -d postgres -c "DROP DATABASE casa_sopa;" -c "CREATE DATABASE casa_sopa;"
+# SQLite
+rm casa_sopa_dev.db
+
+uv run alembic upgrade head
+uv run python -m app.cli criar-admin --nome "Nome" --email admin@exemplo.org --telefone 16999990000
+```
+
+Se houver dados locais que importam, faça antes um backup (`POST /sistema/backup` ou
+`pg_dump -Fc -U casa_sopa -h localhost casa_sopa > antes.dump`).
+
+**Criar uma migration nova** (depois de alterar algo em `app/models/`):
+
+```bash
+uv run alembic revision --autogenerate --rev-id 0003 -m "descricao curta"
+# revise o arquivo gerado em alembic/versions/ (o autogenerate não detecta tudo: renomeações,
+# CHECKs e dados precisam de ajuste à mão), depois:
+uv run alembic upgrade head && uv run alembic downgrade -1 && uv run alembic upgrade head
+uv run pytest tests/test_modelagem.py
+```
+
+Modelo novo precisa ser importado em `app/models/__init__.py` (que `app/db/base.py` carrega),
+senão o autogenerate não enxerga a tabela. Nunca edite uma migration que já foi para a `dev`:
+crie outra.
 
 ## Front-end
 
@@ -75,6 +182,20 @@ Pontos de comportamento:
   (CSP restritiva); as telas restritas também são barradas no servidor, que é quem decide.
 - **Não incluído:** o protótipo mostrava *Caixa*, *taxa de entrega*, *valor recebido* e *data/hora de entrega*. Não estão nos
   requisitos nem no modelo de dados (`casa_da_sopa_banco.sql`), então não foram feitos.
+
+### Acessibilidade, tema e LGPD
+
+A interface oferece modo escuro no login e no cabeçalho, com preferência salva neste
+navegador; sem escolha salva, acompanha o sistema. Há foco visível, atalho para o conteúdo,
+abas operáveis por setas/Home/End, seleção de pedidos por teclado e diálogos/menu móvel
+com foco contido e fechamento por Escape. Animações respeitam movimento reduzido.
+
+Formulários de clientes, usuários, pedidos e login apresentam a finalidade do uso de
+dados e orientações de atendimento. Esses avisos são medidas de transparência, não uma
+certificação de conformidade integral com a LGPD. A administração deve definir o canal
+de atendimento, a base legal aplicável e os prazos de guarda conforme suas operações.
+Inativação mantém o histórico e não equivale à exclusão. Referência:
+[orientações da ANPD](https://www.gov.br/anpd/pt-br/acesso-a-informacao/perguntas-frequentes).
 
 ### Alterar o front (precisa de Node.js 20+)
 
@@ -124,6 +245,9 @@ Pontos que os documentos não detalham e que ficaram definidos assim (mudam em u
   ser criado sem estoque suficiente.
 - Edição: em aberto, tudo; confirmado, só pagamento, endereço e observação; entregue/cancelado,
   nada. A vendedora responsável não muda (RN10). Só pedido em aberto pode ser excluído (RN11).
+- Só a vendedora responsável pelo pedido e as administradoras podem editar, excluir ou mudar o
+  status. A autorização é conferida no servidor antes de mexer em dados ou estoque, inclusive em
+  chamadas diretas à API.
 - O endereço de entrega precisa ser um endereço **ativo do próprio cliente** (RM05).
 - Cupom (PDF A5, uma página por via): `via=interna|entregador|cliente|todas`. Pedido cancelado não gera cupom.
 
@@ -144,6 +268,10 @@ Pontos que os documentos não detalham e que ficaram definidos assim (mudam em u
 - "Venda" = pedido confirmado ou entregue, pela data da venda no fuso `TIMEZONE`. Dashboard = últimos 30 dias.
 - Comissão = valor × percentual **atual** da vendedora: «a receber» sobre os entregues, «pendente»
   sobre os confirmados. (O modelo não guarda o percentual da época da venda.)
+- Relatórios incluem pedidos de vendedoras e administradoras. O filtro **Perfil de usuário** escolhe
+  só vendedoras, só administradoras ou todos; **Responsável** filtra uma pessoa, inclusive inativa.
+  Gráficos, totais e exportações usam os mesmos filtros. Administradoras não recebem comissão. A API
+  mantém `id_vendedora`, `vendedoras` e `por_vendedora` por compatibilidade; `cargo` é opcional.
 - Exportação: XLSX (resumo + pedidos) ou CSV (pedidos, `;` e vírgula decimal). Textos que começam
   com `= + - @` são neutralizados contra injeção de fórmula.
 
@@ -189,39 +317,15 @@ recusa SVG e imagens enormes e regrava como PNG de até 512 px, descartando meta
 ## Modelo de dados
 
 Oito tabelas conforme `casa_da_sopa_banco.sql` (colunas em `snake_case`): `usuario`, `produto`,
-`cliente`, `endereco`, `cliente_endereco`, `vendas`, `item_vendas`, `movimentacoes`. Exclusão lógica
+`cliente`, `endereco`, `cliente_endereco`, `vendas`, `item_vendas`, `movimentacoes`, mais a
+`venda_importada` (histórica, ver migration `0002`). Exclusão lógica
 por `is_ativo` (nada é apagado, RM06). Lacunas conhecidas do modelo: não há data/horário de entrega
 no pedido (RF11/RF14), nem usuário em `movimentacoes` (RF22, contornado na observação), nem colunas
 de bloqueio de login (feito em memória).
 
-```bash
-uv run alembic revision --autogenerate -m "descricao"   # após alterar app/models/
-uv run alembic upgrade head | downgrade -1 | check
-```
+Migrations e atualização do banco local: ver [Atualizar o banco local](#atualizar-o-banco-local-migration-mais-recente).
 
 ## Testes e qualidade
-
-Relatórios incluem pedidos de vendedoras e administradoras. O filtro **Perfil de usuário**
-permite selecionar só vendedoras, só administradoras ou todos; **Responsável** filtra uma
-pessoa, inclusive inativa. Gráficos, totais e exportações CSV/Excel usam os mesmos filtros.
-Administradoras não recebem comissão. A API mantém `id_vendedora`, `vendedoras` e
-`por_vendedora` por compatibilidade, aceitando também administradoras; `cargo` é opcional.
-
-Somente a vendedora responsável pelo pedido e as administradoras podem editar, excluir
-ou alterar seu status. A autorização é conferida no servidor antes de modificar dados
-ou estoque, inclusive quando a chamada é feita diretamente à API.
-
-A interface oferece modo escuro no login e no cabeçalho, com preferência salva neste
-navegador; sem escolha salva, acompanha o sistema. Há foco visível, atalho para o conteúdo,
-abas operáveis por setas/Home/End, seleção de pedidos por teclado e diálogos/menu móvel
-com foco contido e fechamento por Escape. Animações respeitam movimento reduzido.
-
-Formulários de clientes, usuários, pedidos e login apresentam a finalidade do uso de
-dados e orientações de atendimento. Esses avisos são medidas de transparência, não uma
-certificação de conformidade integral com a LGPD. A administração deve definir o canal
-de atendimento, a base legal aplicável e os prazos de guarda conforme suas operações.
-Inativação mantém o histórico e não equivale à exclusão. Referência:
-[orientações da ANPD](https://www.gov.br/anpd/pt-br/acesso-a-informacao/perguntas-frequentes).
 
 ```bash
 uv run pytest                                        # toda a suíte
@@ -265,4 +369,11 @@ Request para `dev`. Versione `pyproject.toml` + `uv.lock`, `.python-version`, `a
 - **`uv sync` com `os error 396`** (pasta no OneDrive): `$env:UV_LINK_MODE = "copy"`.
 - **Não sobe e cita `SECRET_KEY`:** vazia ou com menos de 32 caracteres.
 - **Backup falha com "pg_dump não encontrado":** instale o cliente do PostgreSQL ou defina `PG_DUMP_PATH`.
-- **Alembic não vê tabela nova:** importe o modelo em `app/db/base.py`.
+- **Alembic não vê tabela nova:** importe o modelo em `app/models/__init__.py`.
+- **`Can't locate revision identified by 'dfa3097f5933'`:** banco criado com a migration antiga; recrie-o
+  (ver [Atualizar o banco local](#atualizar-o-banco-local-migration-mais-recente)).
+- **`relation ... does not exist` ao subir ou nos testes:** faltou `uv run alembic upgrade head`, ou o
+  banco `casa_sopa_test` não existe.
+- **`connection refused` na porta 5432:** o PostgreSQL não está rodando (`docker start casa-sopa-db`).
+- **Porta 5432 ocupada** por outro PostgreSQL: publique o contêiner em outra porta (`-p 5433:5432`) e
+  ajuste as URLs do `.env`.
